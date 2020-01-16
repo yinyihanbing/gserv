@@ -55,7 +55,7 @@ func TransformRowData(schema *Schema, vContainer []interface{}, p interface{}) (
 	for j, field := range schema.Fields {
 		value := reflect.ValueOf(vContainer[j]).Elem()
 		if field.ColumnType == ColumnTypeDatetime {
-			t, err := goutils.ParseTime(value.String())
+			t, err := gutils.ParseTime(value.String())
 			if err != nil {
 				err = fmt.Errorf("parse time error. string=%v, err=%v", value.String(), err)
 				break

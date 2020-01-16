@@ -1,14 +1,16 @@
 package cluster
 
 import (
+	"net"
 	"math"
 	"time"
+	"reflect"
 
 	"github.com/yinyihanbing/gserv/conf"
 	"github.com/yinyihanbing/gserv/network"
 	"github.com/yinyihanbing/gutils/logs"
-	"github.com/yinyihanbing/gserv/network/protobuf"
 	"github.com/yinyihanbing/gserv/chanrpc"
+	"github.com/yinyihanbing/gserv/network/protobuf"
 )
 
 var (
@@ -16,6 +18,7 @@ var (
 	clients []*network.TCPClient
 
 	AgentChanRPC *chanrpc.Server
+	Processor    *protobuf.Processor
 )
 
 func Init() {
@@ -62,14 +65,13 @@ func Destroy() {
 }
 
 type Agent struct {
-	conn      *network.TCPConn
-	Processor network.Processor
+	conn     *network.TCPConn
+	userData interface{}
 }
 
 func newAgent(conn *network.TCPConn) network.Agent {
 	a := new(Agent)
 	a.conn = conn
-	a.Processor = protobuf.NewProcessor()
 	AgentChanRPC.Go("NewAgent", a)
 	return a
 }
@@ -80,14 +82,14 @@ func (a *Agent) Run() {
 		if err != nil {
 			break
 		}
-		if a.Processor != nil {
-			msg, err := a.Processor.Unmarshal(data)
+		if Processor != nil {
+			msg, err := Processor.Unmarshal(data)
 			if err != nil {
 				logs.Error("unmarshal message error: %v", err)
 				break
 			}
 
-			err = a.Processor.Route(msg, a)
+			err = Processor.Route(msg, a)
 			if err != nil {
 				logs.Error("route message error: %v", err)
 				break
@@ -97,5 +99,48 @@ func (a *Agent) Run() {
 }
 
 func (a *Agent) OnClose() {
+	if AgentChanRPC != nil {
+		err := AgentChanRPC.Call0("CloseAgent", a)
+		if err != nil {
+			logs.Error("chanrpc error: %v", err)
+		}
+	}
+}
 
+func (a *Agent) WriteMsg(msg interface{}) {
+	if Processor != nil {
+		data, err := Processor.Marshal(msg)
+		if err != nil {
+			logs.Error("marshal message %v error: %v", reflect.TypeOf(msg), err)
+			return
+		}
+		err = a.conn.WriteMsg(data...)
+		if err != nil {
+			logs.Error("write message %v error: %v", reflect.TypeOf(msg), err)
+		}
+	}
+}
+
+func (a *Agent) LocalAddr() net.Addr {
+	return a.conn.LocalAddr()
+}
+
+func (a *Agent) RemoteAddr() net.Addr {
+	return a.conn.RemoteAddr()
+}
+
+func (a *Agent) Close() {
+	a.conn.Close()
+}
+
+func (a *Agent) Destroy() {
+	a.conn.Destroy()
+}
+
+func (a *Agent) UserData() interface{} {
+	return a.userData
+}
+
+func (a *Agent) SetUserData(data interface{}) {
+	a.userData = data
 }

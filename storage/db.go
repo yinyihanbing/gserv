@@ -154,8 +154,8 @@ func (this *DbCli) GetTableStruct(tableName string) ([]*Field, error) {
 		f.Name = col1
 		f.ColumnName = col1
 		if idx := strings.Index(col2, "("); idx > 0 {
-			f.ColumnType = EnumColumnType(goutils.SubString(col2, 0, strings.Index(col2, "(")))
-			x, err := strconv.Atoi(goutils.SubString(col2, strings.Index(col2, "(")+1, strings.Index(col2, ")")))
+			f.ColumnType = EnumColumnType(gutils.SubString(col2, 0, strings.Index(col2, "(")))
+			x, err := strconv.Atoi(gutils.SubString(col2, strings.Index(col2, "(")+1, strings.Index(col2, ")")))
 			if err != nil {
 				return nil, err
 			}
@@ -464,7 +464,7 @@ func (this *DbCli) GetSchemaManager() *SchemaManager {
 
 // 同步表结构
 func (this *DbCli) syncTableStruct(hasTablesName []string, schema *Schema) {
-	if goutils.ContainSVStr(hasTablesName, schema.TableName) {
+	if gutils.ContainSVStr(hasTablesName, schema.TableName) {
 		fields, err := this.GetTableStruct(schema.TableName)
 		if err != nil {
 			logs.Fatal(err)

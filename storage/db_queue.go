@@ -31,7 +31,7 @@ type DbQueue struct {
 	closeFlag        bool
 	lock             sync.Mutex
 
-	timerHelper *goutils.TimerHelper
+	timerHelper *gutils.TimerHelper
 	Dcr         *DbQueueDcr
 }
 
@@ -49,7 +49,7 @@ func NewDbQueue(queueType DbQueueType, redisCliIdx int, dbCliIdx int, queueLimit
 	dbQueue.QueueDbCliIdx = dbCliIdx
 	dbQueue.QueueRedisCliIdx = redisCliIdx
 	dbQueue.Dcr = new(DbQueueDcr)
-	dbQueue.timerHelper = goutils.NewTimerHelper()
+	dbQueue.timerHelper = gutils.NewTimerHelper()
 
 	switch queueType {
 	case DbQueueTypeMemory:
