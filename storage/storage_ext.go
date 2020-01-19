@@ -39,7 +39,7 @@ func ReloadAllFormDbToRedis(dbCli *DbCli, redisCli *RedisCli, redisKey string, u
 	}
 
 	// 存储到Redis中
-	err = redisCli.DoHMSetExt(redisKey, mData)
+	err = redisCli.DoHMSet(redisKey, mData)
 	if err != nil {
 		return 0, false
 	}
@@ -98,7 +98,7 @@ func ReloadAllFormDbToRedisExt(dbCli *DbCli, redisCli *RedisCli, redisKeyPrefix 
 			return 0, false
 		}
 		// 写入Redis缓存
-		err = redisCli.DoHMSetExt(k1, v1)
+		err = redisCli.DoHMSet(k1, v1)
 		if err != nil {
 			return 0, false
 		}
@@ -139,7 +139,7 @@ func ReloadMultipleFormDbToRedis(dbCli *DbCli, redisCli *RedisCli, redisKey stri
 	}
 
 	// 存储到Redis中
-	err = redisCli.DoHMSetExt(redisKey, mData)
+	err = redisCli.DoHMSet(redisKey, mData)
 	if err != nil {
 		return 0, false
 	}
@@ -159,7 +159,7 @@ func GetFromRedisByUniqueField(redisCli *RedisCli, redisKey string, uniqueFieldV
 		args[i] = v.Index(i).Interface()
 	}
 
-	err := redisCli.DoHMGetExt(redisKey, prt, args...)
+	err := redisCli.DoHMGet(redisKey, prt, args...)
 	if err != nil {
 		return false
 	}

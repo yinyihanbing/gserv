@@ -184,7 +184,7 @@ func (this *MgrBase) ReloadDbDataToRedis(pSlice interface{}, dbQueryParams map[s
 			return 0, err
 		}
 		// 写入Redis缓存
-		err = GetRedisCli().DoHMSetExt(k1, v1)
+		err = GetRedisCli().DoHMSet(k1, v1)
 		if err != nil {
 			return 0, err
 		}
@@ -316,7 +316,7 @@ func (this *MgrBase) Get(kvs []interface{}, fvs []interface{}, p interface{}) (e
 		return false, err
 	}
 
-	exists, err = GetRedisCli().DoHGetExt(rKey, rField, p)
+	exists, err = GetRedisCli().DoHGetProto(rKey, rField, p)
 	return
 }
 
@@ -349,7 +349,7 @@ func (this *MgrBase) GetMultiple(kvs []interface{}, fvs [][]interface{}, p inter
 		args = append(args, rField)
 	}
 
-	err = GetRedisCli().DoHMGetExt(rKey, p, args...)
+	err = GetRedisCli().DoHMGet(rKey, p, args...)
 	if err != nil {
 		return err
 	}
@@ -375,7 +375,7 @@ func (this *MgrBase) GetAll(param ...interface{}) error {
 		return err
 	}
 
-	if err := GetRedisCli().DoHValsExt(rKey, param[len(param)-1]); err != nil {
+	if err := GetRedisCli().DoHVals(rKey, param[len(param)-1]); err != nil {
 		return err
 	}
 
@@ -389,7 +389,7 @@ func (this *MgrBase) GetFieldsLen(kvs ...interface{}) (int64, error) {
 		return 0, err
 	}
 
-	l, err := GetRedisCli().DoHLenExt(rKey)
+	l, err := GetRedisCli().DoHLen(rKey)
 	if err != nil {
 		return 0, err
 	}
@@ -424,7 +424,7 @@ func (this *MgrBase) IsKeyExists(kvs ...interface{}) (exists bool, err error) {
 		return false, err
 	}
 
-	exists, err = GetRedisCli().DoExistsExt(rKey)
+	exists, err = GetRedisCli().DoExists(rKey)
 	return exists, err
 }
 
@@ -440,7 +440,7 @@ func (this *MgrBase) IsFieldExists(kvs []interface{}, fvs []interface{}) (exists
 		return false, err
 	}
 
-	exists, err = GetRedisCli().DoHExistsExt(rKey, rField)
+	exists, err = GetRedisCli().DoHExists(rKey, rField)
 	return exists, err
 }
 
@@ -462,7 +462,7 @@ func (this *MgrBase) AddToRedis(p ... interface{}) bool {
 		if err != nil {
 			return false
 		}
-		if err = redisCli.DoHSetExt(rKey, rField, p[0]); err != nil {
+		if err = redisCli.DoHSet(rKey, rField, p[0]); err != nil {
 			return false
 		}
 	} else {
@@ -471,7 +471,7 @@ func (this *MgrBase) AddToRedis(p ... interface{}) bool {
 			return false
 		}
 		for k, v := range mData {
-			if err := redisCli.DoHMSetExt(k, v); err != nil {
+			if err := redisCli.DoHMSet(k, v); err != nil {
 				return false
 			}
 		}
@@ -516,7 +516,7 @@ func (this *MgrBase) GetWithCheckDbLoad(kvs []interface{}, fvs []interface{}, p 
 	if err != nil {
 		return err
 	}
-	if err := GetRedisCli().DoHSetExt(rKey, rField, p); err != nil {
+	if err := GetRedisCli().DoHSet(rKey, rField, p); err != nil {
 		return err
 	}
 

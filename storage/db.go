@@ -345,7 +345,7 @@ func (this *DbCli) SelectMultipleBySql(p interface{}, strSql string) (err error)
 	defer rows.Close()
 
 	if rows != nil {
-		structType := GetStructType(p)
+		structType := GetStructType(reflect.TypeOf(p))
 		pContainerKind := reflect.TypeOf(p).Elem().Kind()
 		pStructKind := reflect.TypeOf(p).Elem().Elem().Kind()
 

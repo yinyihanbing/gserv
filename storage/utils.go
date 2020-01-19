@@ -11,6 +11,7 @@ import (
 
 	"github.com/garyburd/redigo/redis"
 	"github.com/yinyihanbing/gutils"
+	"github.com/golang/protobuf/proto"
 )
 
 // 将驼峰命名的字符串转换成带'_'的全小写字符串
@@ -137,16 +138,18 @@ func ParseColumnValue(field *Field, v interface{}) (interface{}, error) {
 }
 
 // 获取slice、map、ptr里结构体最终类型
-func GetStructType(p interface{}) reflect.Type {
-	reflectType := reflect.ValueOf(p).Type()
-	for reflectType.Kind() == reflect.Slice || reflectType.Kind() == reflect.Map || reflectType.Kind() == reflect.Ptr {
-		reflectType = reflectType.Elem()
+func GetStructType(t reflect.Type) reflect.Type {
+	for t.Kind() == reflect.Slice || t.Kind() == reflect.Map || t.Kind() == reflect.Ptr {
+		t = t.Elem()
 	}
-	return reflectType
+	return t
 }
 
-// 获取转换后的redis返回值
-func GetRedisValue(redisValue interface{}, valueKind reflect.Kind) (result interface{}, err error) {
+// 转换Redis值到存储值
+func TransferRedisValToVal(redisValue interface{}, t reflect.Type) (result interface{}, err error) {
+	st := GetStructType(t)
+	valueKind := st.Kind()
+
 	switch valueKind {
 	case reflect.Int8, reflect.Uint8, reflect.Int16, reflect.Uint16, reflect.Int, reflect.Int32:
 		v, err := redis.Int(redisValue, err)
@@ -188,9 +191,21 @@ func GetRedisValue(redisValue interface{}, valueKind reflect.Kind) (result inter
 		case reflect.Uint32:
 			result = uint32(v)
 		}
+	case reflect.Struct:
+		result = reflect.New(st).Interface()
+		err = proto.Unmarshal(redisValue.([]byte), result.(proto.Message))
 	default:
 		return nil, errors.New(fmt.Sprintf("get redis value error, type=%v, v=%v", valueKind, redisValue))
 	}
 
 	return
+}
+
+// 转换值到Redis存储值
+func TransferValToRedisVal(v interface{}) (redisVal interface{}, err error) {
+	if _, ok := v.(proto.Message); ok {
+		redisVal, err = proto.Marshal(v.(proto.Message))
+		return
+	}
+	return v, nil
 }

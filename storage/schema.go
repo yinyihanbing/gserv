@@ -43,7 +43,7 @@ func newSchemaManager() *SchemaManager {
 
 // 注册结构体概要信息, pks:主键属性名...
 func (s *SchemaManager) Register(p interface{}, pks ...string) (*Schema) {
-	reflectType := GetStructType(p)
+	reflectType := GetStructType(reflect.TypeOf(p))
 
 	schema := &Schema{Type: reflectType, TableName: ChangleName(reflectType.Name())}
 	var err error
@@ -77,7 +77,7 @@ func (s *SchemaManager) GetAllSchema() map[reflect.Type]*Schema {
 
 // 获取结构体概述, p:类型引用
 func (s *SchemaManager) GetSchema(p interface{}) (*Schema, error) {
-	reflectType := GetStructType(p)
+	reflectType := GetStructType(reflect.TypeOf(p))
 	if v, ok := s.schemas[reflectType]; ok {
 		return v, nil
 	}

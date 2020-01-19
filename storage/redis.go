@@ -28,7 +28,7 @@ type RedisConfig struct {
 }
 
 // 获取切片指针的reflect.Kind和reflect.Value
-func (this *RedisCli) getPrtSliceKV(slicePrt interface{}) (k reflect.Kind, v reflect.Value, err error) {
+func (this *RedisCli) getPrtSliceKV(slicePrt interface{}) (v reflect.Value, err error) {
 	if slicePrt == nil {
 		return
 	}
@@ -39,9 +39,8 @@ func (this *RedisCli) getPrtSliceKV(slicePrt interface{}) (k reflect.Kind, v ref
 		return
 	}
 	v = v.Elem()
-	k = sType.Elem().Elem().Kind()
 
-	return k, v, nil
+	return v, nil
 }
 
 // 新建一个Redis连接池
@@ -109,27 +108,15 @@ func (this *RedisCli) DoSet(key interface{}, v interface{}) (err error) {
 	conn := this.pool.Get()
 	defer conn.Close()
 
-	_, err = conn.Do("SET", key, v)
+	redisV, err := TransferValToRedisVal(v)
 	if err != nil {
-		logs.Error("Redis Do SET error! err=%v", err)
+		logs.Error("Redis DoSet error! %v", err)
 		return err
 	}
-	return nil
-}
 
-// SET 扩展, rKey:键 p:protobuf结构引用
-func (this *RedisCli) DoSetExt(key interface{}, p interface{}) (err error) {
-	conn := this.pool.Get()
-	defer conn.Close()
-
-	bytes, err := proto.Marshal(p.(proto.Message))
+	_, err = conn.Do("SET", key, redisV)
 	if err != nil {
-		logs.Error("Protobuf Marshal error:%v", err)
-		return err
-	}
-	_, err = conn.Do("SET", key, bytes)
-	if err != nil {
-		logs.Error("Redis Do SET error! err=%v", err)
+		logs.Error("Redis DoSet error! %v", err)
 		return err
 	}
 	return nil
@@ -142,21 +129,21 @@ func (this *RedisCli) DoGet(key interface{}) (v interface{}, err error) {
 
 	ret, err := conn.Do("GET", key)
 	if err != nil {
-		logs.Error("Redis Do GET error! err=%v", err)
+		logs.Error("Redis DoGet error! %v", err)
 		return nil, err
 	}
 
 	return ret, nil
 }
 
-// GET 扩展, key:键 p:protobuf结构引用
-func (this *RedisCli) DoGetExt(key interface{}, p interface{}) (exists bool, err error) {
+// GET, key:键 prtProtoStruct:proto结构引用
+func (this *RedisCli) DoGetProto(key interface{}, prtProtoStruct interface{}) (exists bool, err error) {
 	conn := this.pool.Get()
 	defer conn.Close()
 
 	ret, err := conn.Do("GET", key)
 	if err != nil {
-		logs.Error("Redis Do GET error! err=%v", err)
+		logs.Error("Redis DoGetProto error! %v", err)
 		return false, err
 	}
 
@@ -164,9 +151,9 @@ func (this *RedisCli) DoGetExt(key interface{}, p interface{}) (exists bool, err
 		return false, nil
 	}
 
-	err = proto.Unmarshal(ret.([]byte), p.(proto.Message))
+	err = proto.Unmarshal(ret.([]byte), prtProtoStruct.(proto.Message))
 	if err != nil {
-		logs.Error("Redis Do GET Protobuf Unmarshal error! key=%v, err=%v", key, err)
+		logs.Error("Redis DoGetProto error! Proto Unmarshal error! key=%v, err=%v", key, err)
 		return false, err
 	}
 	return true, nil
@@ -177,28 +164,15 @@ func (this *RedisCli) DoHSet(key interface{}, field interface{}, v interface{}) 
 	conn := this.pool.Get()
 	defer conn.Close()
 
-	_, err = conn.Do("HSET", key, field, v)
+	redisV, err := TransferValToRedisVal(v)
 	if err != nil {
-		logs.Error("Redis Do HSET error! key=%v, field=%v, err=%v", key, field, err)
+		logs.Error("Redis DoHSet error! %v", err)
 		return err
 	}
 
-	return nil
-}
-
-// HSET 扩展, key:键 field:域 p:protobuf结构引用
-func (this *RedisCli) DoHSetExt(key interface{}, field interface{}, p interface{}) (err error) {
-	conn := this.pool.Get()
-	defer conn.Close()
-
-	bytes, err := proto.Marshal(p.(proto.Message))
+	_, err = conn.Do("HSET", key, field, redisV)
 	if err != nil {
-		logs.Error("Redis Do HSET Protobuf Marshal error! key=%v, field=%v, err=%v", key, field, err)
-		return err
-	}
-	_, err = conn.Do("HSET", key, field, bytes)
-	if err != nil {
-		logs.Error("Redis Do HSET error! key=%v, field=%v, err=%v", key, field, err)
+		logs.Error("Redis DoHSet error! key=%v, field=%v, err=%v", key, field, err)
 		return err
 	}
 
@@ -213,14 +187,14 @@ func (this *RedisCli) DoHGet(key interface{}, field interface{}) (v interface{},
 	return conn.Do("HGET", key, field)
 }
 
-// HGET 扩展, key:键 field:域 p:protobuf结构引用
-func (this *RedisCli) DoHGetExt(key interface{}, field interface{}, p interface{}) (exists bool, err error) {
+// HGET, key:键 field:域 prtProtoStruct:proto结构引用
+func (this *RedisCli) DoHGetProto(key interface{}, field interface{}, prtProtoStruct interface{}) (exists bool, err error) {
 	conn := this.pool.Get()
 	defer conn.Close()
 
 	ret, err := conn.Do("HGET", key, field)
 	if err != nil {
-		logs.Error("Redis Do HGET error! key=%v, field=%v, err=%v", key, field, err)
+		logs.Error("Redis DoHGetProto error! key=%v, field=%v, err=%v", key, field, err)
 		return false, err
 	}
 
@@ -228,16 +202,16 @@ func (this *RedisCli) DoHGetExt(key interface{}, field interface{}, p interface{
 		return false, nil
 	}
 
-	err = proto.Unmarshal(ret.([]byte), p.(proto.Message))
+	err = proto.Unmarshal(ret.([]byte), prtProtoStruct.(proto.Message))
 	if err != nil {
-		logs.Error("Redis Do HGET Protobuf Unmarshal error! key=%v, field=%v, err=%v", key, field, err)
+		logs.Error("Redis DoHGetProto error! key=%v, field=%v, err=%v", key, field, err)
 		return false, err
 	}
 
 	return true, nil
 }
 
-// HMSET, key:键 m: <k域, v值>
+// HMSET 设置指定多项键域值 key:键 m: <k域, 值>
 func (this *RedisCli) DoHMSet(key interface{}, m map[interface{}]interface{}) (err error) {
 	if len(m) == 0 {
 		return
@@ -249,49 +223,25 @@ func (this *RedisCli) DoHMSet(key interface{}, m map[interface{}]interface{}) (e
 	args := make([]interface{}, 0, len(m)*2+1)
 	args = append(args, key)
 	for k, v := range m {
-		args = append(args, k, v)
-	}
-
-	_, err = conn.Do("HMSET", args...)
-	if err != nil {
-		logs.Error("Redis Do HMSet error! key=%v,err=%v", key, err)
-		return err
-	}
-
-	return nil
-}
-
-// HMSET 扩展, key:键 m: <k域, protobuf结构>
-func (this *RedisCli) DoHMSetExt(key interface{}, m map[interface{}]interface{}) (err error) {
-	if len(m) == 0 {
-		return
-	}
-
-	conn := this.pool.Get()
-	defer conn.Close()
-
-	args := make([]interface{}, 0, len(m)*2+1)
-	args = append(args, key)
-	for k, v := range m {
-		bytes, err := proto.Marshal(v.(proto.Message))
+		val, err := TransferValToRedisVal(v)
 		if err != nil {
-			logs.Error("Redis Do HMSet Protobuf Marshal error! key=%v, err=%v", key, err)
+			logs.Error("Redis DoHMSet error! key=%v, err=%v", key, err)
 			return err
 		}
-		args = append(args, k, bytes)
+		args = append(args, k, val)
 	}
 
 	_, err = conn.Do("HMSET", args...)
 	if err != nil {
-		logs.Error("Redis Do HMSet error! key=%v,err=%v", key, err)
+		logs.Error("Redis DoHMSet error! key=%v,err=%v", key, err)
 		return err
 	}
 
 	return nil
 }
 
-// HMGET 扩展, key:键  p:protobuf结构引用切片, fields:一个或多个域
-func (this *RedisCli) DoHMGetExt(key interface{}, p interface{}, fieldValues ...interface{}) (err error) {
+// HMGET 获取指定键域中的值 key:键  prtSlice:结构引用切片, fields:域
+func (this *RedisCli) DoHMGet(key interface{}, prtSlice interface{}, fieldValues ...interface{}) (err error) {
 	if len(fieldValues) == 0 {
 		return
 	}
@@ -305,98 +255,92 @@ func (this *RedisCli) DoHMGetExt(key interface{}, p interface{}, fieldValues ...
 
 	values, err := redis.Values(conn.Do("HMGET", args...))
 	if err != nil {
-		logs.Error("Redis Do HMGET error! key=%v, err=%v", key, err)
+		logs.Error("Redis DoHMGet error! key=%v, err=%v", key, err)
 		return
 	}
 	if values == nil {
 		return
 	}
 
-	results := reflect.ValueOf(p)
-	if results.Kind() == reflect.Ptr {
-		results = results.Elem()
-	}
+	pt := reflect.TypeOf(prtSlice)
+	rv := reflect.ValueOf(prtSlice).Elem()
 
 	for _, v := range values {
 		if v != nil {
-			newItem := reflect.New(GetStructType(p)).Interface()
-			err = proto.Unmarshal(v.([]byte), newItem.(proto.Message))
+			newItem, err := TransferRedisValToVal(v, pt)
 			if err != nil {
-				logs.Error("Redis Do HMGET Protobuf Unmarshal error! key=%v, err=%v", key, err)
-				return
+				logs.Error("Redis DoHMGet error! key=%v, err=%v", key, err)
+				return err
 			}
-			results.Set(reflect.Append(results, reflect.ValueOf(newItem)))
+			rv.Set(reflect.Append(rv, reflect.ValueOf(newItem)))
 		}
 	}
 
 	return nil
 }
 
-// HGET 扩展, key:键  p:protobuf结构引用切片
-func (this *RedisCli) DoHValsExt(key interface{}, p interface{}) (err error) {
+// HVals 获取指定键中的值 key:键  prtSlice:结构引用切片
+func (this *RedisCli) DoHVals(key interface{}, prtSlice interface{}) (err error) {
 	conn := this.pool.Get()
 	defer conn.Close()
 
 	values, err := redis.Values(conn.Do("HVALS", key))
 	if err != nil {
-		logs.Error("Redis Do HVALS error! key=%v, err=%v", key, err)
-		return
+		logs.Error("Redis DoHVals error! key=%v, err=%v", key, err)
+		return err
 	}
 
-	results := reflect.ValueOf(p)
-	if results.Kind() == reflect.Ptr {
-		results = results.Elem()
-	}
+	pt := reflect.TypeOf(prtSlice)
+	pv := reflect.ValueOf(prtSlice).Elem()
 
 	for _, v := range values {
 		if v != nil {
-			newItem := reflect.New(GetStructType(p)).Interface()
-			err = proto.Unmarshal(v.([]byte), newItem.(proto.Message))
+			newItem, err := TransferRedisValToVal(v, pt)
 			if err != nil {
-				logs.Error("Redis Do HVALS Protobuf Unmarshal error! key=%v, err=%v", key, err)
-				return
+				logs.Error("Redis DoHVals error! key=%v, err=%v", key, err)
+				return err
 			}
-			results.Set(reflect.Append(results, reflect.ValueOf(newItem)))
+			pv.Set(reflect.Append(pv, reflect.ValueOf(newItem)))
 		}
 	}
 
 	return nil
 }
 
-// HLEN 扩展,, key：键 返回键中域数量
-func (this *RedisCli) DoHLenExt(key interface{}) (int64, error) {
+// HLEN 返回键中域数量 key：键
+func (this *RedisCli) DoHLen(key interface{}) (int64, error) {
 	conn := this.pool.Get()
 	defer conn.Close()
 
 	v, err := redis.Int64(conn.Do("HLEN", key))
 	if err != nil {
-		logs.Error("Redis Do HLEN error! key=%v, err=%v", key, err)
+		logs.Error("Redis DoHLen error! key=%v, err=%v", key, err)
 		return 0, err
 	}
 	return v, nil
 }
 
 // EXISTS 判断键是否存在, key：键
-func (this *RedisCli) DoExistsExt(key interface{}) (bool, error) {
+func (this *RedisCli) DoExists(key interface{}) (bool, error) {
 	conn := this.pool.Get()
 	defer conn.Close()
 
 	v, e := redis.Int64(conn.Do("EXISTS", key))
 	if e != nil {
-		logs.Error("Redis Do EXISTS error! key=%v, err=%v", key, e)
+		logs.Error("Redis DoExists error! key=%v, err=%v", key, e)
 		return false, e
 	}
 	return v > 0, nil
 }
 
 // HEXISTS 判断键中域是否存在, key：键, field：域
-func (this *RedisCli) DoHExistsExt(key interface{}, field interface{}) (bool, error) {
+func (this *RedisCli) DoHExists(key interface{}, field interface{}) (bool, error) {
 	conn := this.pool.Get()
 	defer conn.Close()
 
 	v, err := redis.Int64(conn.Do("HEXISTS", key, field))
 	if err != nil {
-		logs.Error("Redis Do HEXISTS error! key=%v, field=%v, err=%v", key, field, err)
+		logs.Error("Redis DoHExists error! key=%v, field=%v, err=%v", key, field, err)
 		return false, err
 	}
 	return v > 0, nil
@@ -415,21 +359,21 @@ func (this *RedisCli) DoIncr(key interface{}) (int64, error) {
 	return v, nil
 }
 
-// DEL 删除键, keys：一个或多个键
+// DEL 删除指定键, keys：一个或多个键
 func (this *RedisCli) DoDel(keys ... interface{}) error {
 	conn := this.pool.Get()
 	defer conn.Close()
 
 	_, e := redis.Int64(conn.Do("DEL", keys...))
 	if e != nil {
-		logs.Error("Redis Do DEL error! key=%v, err=%v", keys, e)
+		logs.Error("Redis DoDel error! key=%v, err=%v", keys, e)
 		return e
 	}
 	return nil
 }
 
-// HDEL 删除键, key：键, fields：一个或多个域
-func (this *RedisCli) DoHDelExt(key interface{}, fields ... interface{}) error {
+// HDEL 删除指定键域, key：键, fields：域
+func (this *RedisCli) DoHDel(key interface{}, fields ... interface{}) error {
 	if len(fields) == 0 {
 		return nil
 	}
@@ -442,47 +386,34 @@ func (this *RedisCli) DoHDelExt(key interface{}, fields ... interface{}) error {
 
 	_, err := redis.Int64(conn.Do("HDEL", args...))
 	if err != nil {
-		logs.Error("Redis Do HDEL error! key=%v, field=%v, err=%v", key, args, err)
+		logs.Error("Redis DoHDel error! key=%v, field=%v, err=%v", key, args, err)
 		return err
 	}
 	return nil
 }
 
-// HKEYS, key:键  s:域切片
-func (this *RedisCli) DoHKeys(key interface{}, s interface{}) (err error) {
-	sType := reflect.TypeOf(s)
-	if sType.Kind() == reflect.Ptr {
-		sType = sType.Elem()
-	}
-	sValue := reflect.ValueOf(s)
-	if sValue.Kind() == reflect.Ptr {
-		sValue = sValue.Elem()
-	}
-
-	if sValue.Kind() != reflect.Slice {
-		err = errors.New(fmt.Sprintf("DoHKeys s type not slice, key=%v, type=%v", key, sValue.Kind()))
-		logs.Error(err)
-		return
-	}
-
+// HKEYS 获取域列表 key:键  prtFieldSlice:用于存储域的切片引用
+func (this *RedisCli) DoHKeys(key interface{}, prtFieldSlice interface{}) (err error) {
 	conn := this.pool.Get()
 	defer conn.Close()
 
 	values, err := redis.Values(conn.Do("HKEYS", key))
 	if err != nil {
-		logs.Error("Redis Do HKEYS error! key=%v, err=%v", key, err)
+		logs.Error("Redis DoHKeys error! key=%v, err=%v", key, err)
 		return
 	}
 
-	vElemKind := sType.Elem().Kind()
+	rt := reflect.TypeOf(prtFieldSlice)
+	rv := reflect.ValueOf(prtFieldSlice).Elem()
+
 	for _, v := range values {
 		if v != nil {
-			x, err := GetRedisValue(v, vElemKind)
+			newItem, err := TransferRedisValToVal(v, rt)
 			if err != nil {
-				logs.Error("Redis Do HKEYS error! key=%v, err=%v", key, err)
+				logs.Error("Redis DoHKeys error! key=%v, err=%v", key, err)
 				return err
 			}
-			sValue.Set(reflect.Append(sValue, reflect.ValueOf(x)))
+			rv.Set(reflect.Append(rv, reflect.ValueOf(newItem)))
 		}
 	}
 
@@ -520,7 +451,9 @@ func (this *RedisCli) DoZAdd(key interface{}, params ...interface{}) (err error)
 
 // ZREVRANGE, key:键, membersSlicePrt 切片指针, start, stop 范围(包含)
 func (this *RedisCli) DoZRevRange(key interface{}, membersSlicePrt interface{}, start, stop int) (err error) {
-	mVKind, mValue, err := this.getPrtSliceKV(membersSlicePrt)
+	pt := reflect.TypeOf(membersSlicePrt)
+
+	mValue, err := this.getPrtSliceKV(membersSlicePrt)
 	if err != nil {
 		return
 	}
@@ -538,7 +471,7 @@ func (this *RedisCli) DoZRevRange(key interface{}, membersSlicePrt interface{}, 
 	}
 
 	for _, v := range values {
-		member, err := GetRedisValue(v, mVKind)
+		member, err := TransferRedisValToVal(v, pt)
 		if err != nil {
 			return err
 		}
@@ -550,11 +483,14 @@ func (this *RedisCli) DoZRevRange(key interface{}, membersSlicePrt interface{}, 
 
 // ZREVRANGE, key:键, membersSlicePrt, scoreSlicePrt 切片指针,start, stop 范围(包含)
 func (this *RedisCli) DoZRevRangeWithScores(key interface{}, membersSlicePrt interface{}, scoreSlicePrt interface{}, start, stop int) (err error) {
-	sVKind, sValue, err := this.getPrtSliceKV(scoreSlicePrt)
+	mpt := reflect.TypeOf(membersSlicePrt)
+	spt := reflect.TypeOf(scoreSlicePrt)
+
+	sValue, err := this.getPrtSliceKV(scoreSlicePrt)
 	if err != nil {
 		return
 	}
-	mVKind, mValue, err := this.getPrtSliceKV(membersSlicePrt)
+	mValue, err := this.getPrtSliceKV(membersSlicePrt)
 	if err != nil {
 		return
 	}
@@ -574,13 +510,13 @@ func (this *RedisCli) DoZRevRangeWithScores(key interface{}, membersSlicePrt int
 	l := len(values)
 	for i := 0; i < l; i += 2 {
 		if i+1 < l && values[i] != nil && values[i+1] != nil {
-			idx, err := GetRedisValue(values[i+1], sVKind)
+			idx, err := TransferRedisValToVal(values[i+1], spt)
 			if err != nil {
 				return err
 			}
 			sValue.Set(reflect.Append(sValue, reflect.ValueOf(idx)))
 
-			member, err := GetRedisValue(values[i], mVKind)
+			member, err := TransferRedisValToVal(values[i], mpt)
 			if err != nil {
 				return err
 			}
@@ -593,11 +529,14 @@ func (this *RedisCli) DoZRevRangeWithScores(key interface{}, membersSlicePrt int
 
 // ZRANGE, key:键, scoreSlicePrt, membersSlicePrt 切片指针,start, stop 范围(包含)
 func (this *RedisCli) DoZRangeWithScores(key interface{}, scoreSlicePrt interface{}, membersSlicePrt interface{}, start, stop int) (err error) {
-	sVKind, sValue, err := this.getPrtSliceKV(scoreSlicePrt)
+	mpt := reflect.TypeOf(membersSlicePrt)
+	spt := reflect.TypeOf(scoreSlicePrt)
+
+	sValue, err := this.getPrtSliceKV(scoreSlicePrt)
 	if err != nil {
 		return
 	}
-	mVKind, mValue, err := this.getPrtSliceKV(membersSlicePrt)
+	mValue, err := this.getPrtSliceKV(membersSlicePrt)
 	if err != nil {
 		return
 	}
@@ -617,13 +556,13 @@ func (this *RedisCli) DoZRangeWithScores(key interface{}, scoreSlicePrt interfac
 	l := len(values)
 	for i := 0; i < l; i += 2 {
 		if i+1 < l && values[i] != nil && values[i+1] != nil {
-			idx, err := GetRedisValue(values[i+1], sVKind)
+			idx, err := TransferRedisValToVal(values[i+1], spt)
 			if err != nil {
 				return err
 			}
 			sValue.Set(reflect.Append(sValue, reflect.ValueOf(idx)))
 
-			member, err := GetRedisValue(values[i], mVKind)
+			member, err := TransferRedisValToVal(values[i], mpt)
 			if err != nil {
 				return err
 			}
@@ -636,13 +575,14 @@ func (this *RedisCli) DoZRangeWithScores(key interface{}, scoreSlicePrt interfac
 
 // ZRANGE, key:键, membersSlicePrt 切片指针,start, stop 范围(包含)
 func (this *RedisCli) DoZRange(key interface{}, membersSlicePrt interface{}, start, stop int) (err error) {
+	mpt := reflect.TypeOf(membersSlicePrt)
+
 	mType := reflect.TypeOf(membersSlicePrt)
 	mValue := reflect.ValueOf(membersSlicePrt)
 	if mType.Kind() != reflect.Ptr || mType.Elem().Kind() != reflect.Slice {
 		err = errors.New(fmt.Sprintf("Redis DoZRange: membersSlicePrt must be slice pointer "))
 	}
 	mValue = mValue.Elem()
-	mVKind := mType.Elem().Elem().Kind()
 
 	conn := this.pool.Get()
 	defer conn.Close()
@@ -657,7 +597,7 @@ func (this *RedisCli) DoZRange(key interface{}, membersSlicePrt interface{}, sta
 	}
 
 	for _, v := range values {
-		member, err := GetRedisValue(v, mVKind)
+		member, err := TransferRedisValToVal(v, mpt)
 		if err != nil {
 			return err
 		}
@@ -669,11 +609,14 @@ func (this *RedisCli) DoZRange(key interface{}, membersSlicePrt interface{}, sta
 
 // ZRANGEBYSCORE, key:键, socresSlicePrt, membersSlicePrt 切片指针, minScore, maxScore 整数值或双精度浮点数(包含)
 func (this *RedisCli) DoZRangeByScoreWithScores(key interface{}, scoresSlicePrt interface{}, membersSlicePrt interface{}, minScore, maxScore interface{}) (err error) {
-	sVKind, sValue, err := this.getPrtSliceKV(scoresSlicePrt)
+	mpt := reflect.TypeOf(membersSlicePrt)
+	spt := reflect.TypeOf(scoresSlicePrt)
+
+	sValue, err := this.getPrtSliceKV(scoresSlicePrt)
 	if err != nil {
 		return
 	}
-	mVKind, mValue, err := this.getPrtSliceKV(membersSlicePrt)
+	mValue, err := this.getPrtSliceKV(membersSlicePrt)
 	if err != nil {
 		return
 	}
@@ -693,13 +636,13 @@ func (this *RedisCli) DoZRangeByScoreWithScores(key interface{}, scoresSlicePrt 
 	l := len(values)
 	for i := 0; i < l; i += 2 {
 		if i+1 < l && values[i] != nil && values[i+1] != nil {
-			score, err := GetRedisValue(values[i+1], sVKind)
+			score, err := TransferRedisValToVal(values[i+1], spt)
 			if err != nil {
 				return err
 			}
 			sValue.Set(reflect.Append(sValue, reflect.ValueOf(score)))
 
-			member, err := GetRedisValue(values[i], mVKind)
+			member, err := TransferRedisValToVal(values[i], mpt)
 			if err != nil {
 				return err
 			}
@@ -712,7 +655,9 @@ func (this *RedisCli) DoZRangeByScoreWithScores(key interface{}, scoresSlicePrt 
 
 // ZRANGEBYSCORE, key:键, membersSlicePrt 切片指针, minScore, maxScore 整数值或双精度浮点数(包含)
 func (this *RedisCli) DoZRangeByScore(key interface{}, membersSlicePrt interface{}, minScore, maxScore interface{}) (err error) {
-	mVKind, mValue, err := this.getPrtSliceKV(membersSlicePrt)
+	mpt := reflect.TypeOf(membersSlicePrt)
+
+	mValue, err := this.getPrtSliceKV(membersSlicePrt)
 	if err != nil {
 		return
 	}
@@ -730,7 +675,7 @@ func (this *RedisCli) DoZRangeByScore(key interface{}, membersSlicePrt interface
 	}
 
 	for _, v := range values {
-		member, err := GetRedisValue(v, mVKind)
+		member, err := TransferRedisValToVal(v, mpt)
 		if err != nil {
 			return err
 		}
@@ -802,7 +747,7 @@ func (this *RedisCli) DoZScore(key interface{}, member interface{}) (score int64
 	return score, err
 }
 
-// ZCARD 返回有序集 key 的基数。,, key：键
+// ZCARD 返回有序集 key 的基数, key：键
 func (this *RedisCli) DoZCARD(key interface{}) (int64, error) {
 	conn := this.pool.Get()
 	defer conn.Close()
@@ -829,60 +774,55 @@ func (this *RedisCli) DoExpire(key interface{}, t int64) (err error) {
 	return nil
 }
 
-// HSCAN, key:键 key=键, match=匹配条件,* 默认所有(例: *、*A、*A*、A*), pFieldSlice=域切片指针, pValueSlice=值切片指针, limitCount=查询的条数限制,-1不限制条数
-func (this *RedisCli) DoHScan(key interface{}, match string, pFieldSlice interface{}, pValueSlice interface{}, limitCount int32) (err error) {
-	fVKind, fValue, err := this.getPrtSliceKV(pFieldSlice)
-	if err != nil {
-		return
-	}
-	mVKind, mValue, err := this.getPrtSliceKV(pValueSlice)
-	if err != nil {
-		return
-	}
-
+// 使用迭代方式读取数据, key:键 key=键, match=匹配条件,* 默认所有(例: *、*A、*A*、A*), pF:域指针, pV:值指针, iterFunc:迭代执行函数
+func (this *RedisCli) DoHScan(key interface{}, match string, pF, pV interface{}, iterFunc func(f interface{}, v interface{}, err error) (bool)) {
 	conn := this.pool.Get()
 	defer conn.Close()
 
 	var cursor int64
-	var searchCount int32
-	for i := 0; i < 10000; i++ {
+	ft := reflect.TypeOf(pF)
+	vt := reflect.TypeOf(pV)
+
+	for {
 		reply, err := redis.Values(conn.Do("HSCAN", key, cursor, "match", match))
 		if err != nil {
-			return err
+			logs.Error("Redis DoHScan error! key=%v, match=%v, err=%v", key, match, err)
+			iterFunc(nil, nil, err)
+			break
 		}
 		if len(reply) != 2 {
-			return errors.New(fmt.Sprintf("HSCAN reply slice len error"))
+			err := errors.New(fmt.Sprintf("HSCAN reply slice len error"))
+			logs.Error("Redis DoHScan error! key=%v, match=%v, err=%v", key, match, err)
+			iterFunc(nil, nil, err)
+			break
 		}
 		cursor, err = redis.Int64(reply[0], err)
 		if err != nil {
-			return err
+			logs.Error("Redis DoHScan error! key=%v, match=%v, err=%v", key, match, err)
+			iterFunc(nil, nil, err)
+			break
 		}
-
 		values := reply[1].([]interface{})
 		l := len(values)
 		for i := 0; i < l; i += 2 {
-			if limitCount > 0 {
-				searchCount += 1
-				if searchCount > limitCount {
+			if i+1 < l && values[i] != nil && values[i+1] != nil {
+				field, err := TransferRedisValToVal(values[i], ft)
+				if err != nil {
+					logs.Error("Redis DoHScan error! key=%v, match=%v, err=%v", key, match, err)
+					iterFunc(nil, nil, err)
 					cursor = 0
 					break
 				}
-			}
-
-			if i+1 < l && values[i] != nil && values[i+1] != nil {
-				if pValueSlice != nil {
-					value, err := GetRedisValue(values[i+1], mVKind)
-					if err != nil {
-						return err
-					}
-					mValue.Set(reflect.Append(mValue, reflect.ValueOf(value)))
+				value, err := TransferRedisValToVal(values[i+1], vt)
+				if err != nil {
+					logs.Error("Redis DoHScan error! key=%v, match=%v, err=%v", key, match, err)
+					iterFunc(nil, nil, err)
+					cursor = 0
+					break
 				}
-				if pFieldSlice != nil {
-					field, err := GetRedisValue(values[i], fVKind)
-					if err != nil {
-						return err
-					}
-					fValue.Set(reflect.Append(fValue, reflect.ValueOf(field)))
+				if !iterFunc(field, value, err) {
+					cursor = 0
+					break
 				}
 			}
 		}
@@ -891,8 +831,6 @@ func (this *RedisCli) DoHScan(key interface{}, match string, pFieldSlice interfa
 			break
 		}
 	}
-
-	return nil
 }
 
 // LPUSH, key:键, p=protobuf结构引用
@@ -929,6 +867,7 @@ func (this *RedisCli) DoLRangeExt(key interface{}, slicePrt interface{}, start, 
 		return
 	}
 
+	pt := reflect.TypeOf(slicePrt)
 	results := reflect.ValueOf(slicePrt)
 	if results.Kind() == reflect.Ptr {
 		results = results.Elem()
@@ -936,11 +875,10 @@ func (this *RedisCli) DoLRangeExt(key interface{}, slicePrt interface{}, start, 
 
 	for _, v := range values {
 		if v != nil {
-			newItem := reflect.New(GetStructType(slicePrt)).Interface()
-			err = proto.Unmarshal(v.([]byte), newItem.(proto.Message))
+			newItem, err := TransferRedisValToVal(v, pt)
 			if err != nil {
 				logs.Error("Redis DoLRangeExt Protobuf Unmarshal error! key=%v, err=%v", key, err)
-				return
+				return err
 			}
 			results.Set(reflect.Append(results, reflect.ValueOf(newItem)))
 		}

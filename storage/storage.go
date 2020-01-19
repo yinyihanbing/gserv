@@ -113,7 +113,7 @@ func Add(key string, field interface{}, p interface{}) (err error) {
 		return
 	}
 
-	err = redisCli.DoHSetExt(key, field, p)
+	err = redisCli.DoHSet(key, field, p)
 	if err != nil {
 		return
 	}
@@ -136,7 +136,7 @@ func Delete(key string, field interface{}, p interface{}) (err error) {
 		return
 	}
 
-	err = redisCli.DoHDelExt(key, field)
+	err = redisCli.DoHDel(key, field)
 	if err != nil {
 		return
 	}
@@ -159,7 +159,7 @@ func Update(key string, field interface{}, p interface{}, fields ... string) (er
 		return
 	}
 
-	err = redisCli.DoHSetExt(key, field, p)
+	err = redisCli.DoHSet(key, field, p)
 	if err != nil {
 		return
 	}
@@ -182,7 +182,7 @@ func UpdateMultiple(key string, args map[interface{}]interface{}, fields ... str
 		return
 	}
 
-	err = redisCli.DoHMSetExt(key, args)
+	err = redisCli.DoHMSet(key, args)
 	if err != nil {
 		return
 	}
@@ -207,7 +207,7 @@ func AddMultiple(key string, args map[interface{}]interface{}) (err error) {
 		return
 	}
 
-	err = redisCli.DoHMSetExt(key, args)
+	err = redisCli.DoHMSet(key, args)
 	if err != nil {
 		return
 	}
@@ -237,7 +237,7 @@ func DeleteMultiple(key string, args map[interface{}]interface{}) (err error) {
 		delIds = append(delIds, k)
 	}
 
-	err = redisCli.DoHDelExt(key, delIds...)
+	err = redisCli.DoHDel(key, delIds...)
 	if err != nil {
 		return
 	}
