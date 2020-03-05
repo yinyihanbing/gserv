@@ -9,6 +9,7 @@ import (
 
 	"github.com/gorilla/websocket"
 	"github.com/yinyihanbing/gutils/logs"
+	"strings"
 )
 
 type WSServer struct {
@@ -33,6 +34,21 @@ type WSHandler struct {
 	conns           WebsocketConnSet
 	mutexConns      sync.Mutex
 	wg              sync.WaitGroup
+}
+
+func getRealIP(req *http.Request) net.Addr {
+	ip := req.Header.Get("X-FORWARDED-FOR")
+	if ip == "" {
+		ip = req.Header.Get("X-REAL-IP")
+	}
+	if ip != "" {
+		ip = strings.Split(ip, ",")[0]
+	} else {
+		ip, _, _ = net.SplitHostPort(req.RemoteAddr)
+	}
+	q := net.ParseIP(ip)
+	addr := &net.IPAddr{IP: q}
+	return addr
 }
 
 func (handler *WSHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -66,6 +82,7 @@ func (handler *WSHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	handler.mutexConns.Unlock()
 
 	wsConn := newWSConn(conn, handler.pendingWriteNum, handler.maxMsgLen)
+	wsConn.SetOriginIP(getRealIP(r))
 	agent := handler.newAgent(wsConn)
 	agent.Run()
 
