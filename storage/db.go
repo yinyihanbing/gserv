@@ -401,6 +401,56 @@ func (this *DbCli) SelectMultiple(p interface{}, params map[string]interface{}) 
 	return this.SelectMultipleBySql(p, strSql)
 }
 
+// 使用迭代的方式来读取数据库表多行数据
+func (this *DbCli) SelectScan(p interface{}, params map[string]interface{}, iterFunc func(v interface{}, err error) (bool)) (err error) {
+	schema, err := this.sm.GetSchema(p)
+	if err != nil {
+		return err
+	}
+	var strSql string
+	strSql, err = CreateSelectSql(schema, params)
+	if err != nil {
+		return err
+	}
+
+	return this.SelectScanBySql(p, strSql, iterFunc)
+}
+
+// 使用迭代的方式来读取数据库表多行数据
+func (this *DbCli) SelectScanBySql(p interface{}, strSql string, iterFunc func(v interface{}, err error) (bool)) (err error) {
+	schema, err := this.sm.GetSchema(p)
+	if err != nil {
+		return err
+	}
+
+	vContainer := GetValueContainer(schema)
+	rows, errQuery := this.QueryRow(strSql)
+	if errQuery != nil {
+		return fmt.Errorf("sql error. %v, %v", strSql, errQuery)
+	}
+	defer rows.Close()
+
+	if rows != nil {
+		for rows.Next() {
+			err = rows.Scan(vContainer...)
+			if err != nil {
+				iterFunc(nil, err)
+				break
+			}
+			err = TransformRowData(schema, vContainer, p)
+			if err != nil {
+				iterFunc(nil, err)
+				break
+			}
+			if !iterFunc(p, err) {
+				break
+			}
+		}
+	}
+	logs.Debug("%v;", strSql)
+	return err
+}
+
 // 将sql语句放入队列
 func (this *DbCli) PutToQueue(strSql string) {
 	this.dbQueue.PutToQueue(strSql)
