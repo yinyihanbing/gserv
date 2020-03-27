@@ -7,6 +7,7 @@ import (
 	"github.com/yinyihanbing/gserv/cluster"
 	"github.com/yinyihanbing/gserv/module"
 	"github.com/yinyihanbing/gserv/storage"
+	"github.com/yinyihanbing/gserv/console"
 	"github.com/yinyihanbing/gutils/logs"
 )
 
@@ -21,6 +22,9 @@ func Run(mods ...module.Module) {
 
 	// cluster
 	cluster.Init()
+
+	// console
+	console.Init()
 
 	// close
 	c := make(chan os.Signal, 1)

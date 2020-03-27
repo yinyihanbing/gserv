@@ -12,7 +12,4 @@ var (
 	ListenAddr      string
 	ConnAddrs       []string
 	PendingWriteNum int
-
-	// rpc
-	RpcAddr string
 )
