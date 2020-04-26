@@ -582,3 +582,31 @@ func (this *DbCli) SyncTableStruct(p ... interface{}) {
 		this.syncTableStruct(hasTablesName, s)
 	}
 }
+
+// 检测生成分表
+func (this *DbCli) CheckCreateSeparateTable(p interface{}) error {
+	schema, err := this.sm.GetSchema(p)
+	if err != nil {
+		logs.Error(fmt.Sprintf("schema not exists: %v", p))
+		return err
+	}
+
+	// 获取表名(如果有分表, 需要处理分表表名)
+	isSeparate, separateTableName := schema.GetSeparateTableName()
+	if isSeparate == false {
+		return nil
+	}
+
+	// 获取生成分表的Sql语句
+	arrSeparateSql, err := CreateSeparateTableSql(schema, separateTableName)
+	if err != nil {
+		return err
+	}
+	if len(arrSeparateSql) == 0 {
+		return nil
+	}
+	for _, v := range arrSeparateSql {
+		this.PutToQueue(v)
+	}
+	return nil
+}
