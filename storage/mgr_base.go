@@ -179,10 +179,6 @@ func (this *MgrBase) ReloadDbDataToRedis(pSlice interface{}, dbQueryParams map[s
 
 	// 存储到Redis中
 	for k1, v1 := range mData {
-		// 清空旧Redis缓存
-		if err := GetRedisCli().DoDel(k1); err != nil {
-			return 0, err
-		}
 		// 写入Redis缓存
 		err = GetRedisCli().DoHMSet(k1, v1)
 		if err != nil {
