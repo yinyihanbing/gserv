@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"os"
 	"path"
-	"time"
 	"runtime/pprof"
+	"time"
 
 	"github.com/yinyihanbing/gserv/chanrpc"
 	"github.com/yinyihanbing/gserv/conf"

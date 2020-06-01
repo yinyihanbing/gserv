@@ -152,7 +152,7 @@ func Delete(key string, field interface{}, p interface{}) (err error) {
 }
 
 // 从Redis和Db中更新数据
-func Update(key string, field interface{}, p interface{}, fields ... string) (err error) {
+func Update(key string, field interface{}, p interface{}, fields ...string) (err error) {
 	redisCli := GetRedisCli()
 	if redisCli == nil {
 		err = errors.New(fmt.Sprintf("Update: redisCli idx %v not exists", 0))
@@ -175,7 +175,7 @@ func Update(key string, field interface{}, p interface{}, fields ... string) (er
 }
 
 // 从Redis和Db中更新数据
-func UpdateMultiple(key string, args map[interface{}]interface{}, fields ... string) (err error) {
+func UpdateMultiple(key string, args map[interface{}]interface{}, fields ...string) (err error) {
 	redisCli := GetRedisCli()
 	if redisCli == nil {
 		err = errors.New(fmt.Sprintf("UpdateMultiple: redisCli idx %v not exists", 0))
@@ -278,7 +278,7 @@ func ZAdd(key string, score int64, member interface{}, p interface{}) (err error
 }
 
 // 从Redis和Db中更新数据
-func ZUpdate(key string, score int64, member interface{}, p interface{}, fields ... string) (err error) {
+func ZUpdate(key string, score int64, member interface{}, p interface{}, fields ...string) (err error) {
 	redisCli := GetRedisCli()
 	if redisCli == nil {
 		err = errors.New(fmt.Sprintf("ZUpdate: redisCli idx %v not exists", 0))

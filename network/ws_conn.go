@@ -13,10 +13,10 @@ type WebsocketConnSet map[*websocket.Conn]struct{}
 
 type WSConn struct {
 	sync.Mutex
-	conn      *websocket.Conn
-	writeChan chan []byte
-	maxMsgLen uint32
-	closeFlag bool
+	conn           *websocket.Conn
+	writeChan      chan []byte
+	maxMsgLen      uint32
+	closeFlag      bool
 	remoteOriginIP net.Addr
 }
 

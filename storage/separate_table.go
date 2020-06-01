@@ -1,8 +1,8 @@
 package storage
 
 import (
-	"time"
 	"fmt"
+	"time"
 )
 
 // 分表类型

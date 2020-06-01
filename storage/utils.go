@@ -1,17 +1,17 @@
 package storage
 
 import (
-	"fmt"
-	"time"
 	"bytes"
-	"strings"
-	"reflect"
-	"errors"
 	"encoding/json"
+	"errors"
+	"fmt"
+	"reflect"
+	"strings"
+	"time"
 
 	"github.com/garyburd/redigo/redis"
-	"github.com/yinyihanbing/gutils"
 	"github.com/golang/protobuf/proto"
+	"github.com/yinyihanbing/gutils"
 )
 
 // 将驼峰命名的字符串转换成带'_'的全小写字符串

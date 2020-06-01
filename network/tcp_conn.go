@@ -1,9 +1,9 @@
 package network
 
 import (
+	"github.com/yinyihanbing/gutils/logs"
 	"net"
 	"sync"
-	"github.com/yinyihanbing/gutils/logs"
 )
 
 type ConnSet map[net.Conn]struct{}

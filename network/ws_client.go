@@ -1,10 +1,10 @@
 package network
 
 import (
-	"sync"
-	"time"
 	"github.com/gorilla/websocket"
 	"github.com/yinyihanbing/gutils/logs"
+	"sync"
+	"time"
 )
 
 type WSClient struct {

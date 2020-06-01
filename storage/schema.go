@@ -1,11 +1,11 @@
 package storage
 
 import (
-	"fmt"
-	"reflect"
 	"errors"
-	"time"
+	"fmt"
 	"go/ast"
+	"reflect"
+	"time"
 
 	"github.com/yinyihanbing/gutils/logs"
 )
@@ -42,7 +42,7 @@ func newSchemaManager() *SchemaManager {
 }
 
 // 注册结构体概要信息, pks:主键属性名...
-func (s *SchemaManager) Register(p interface{}, pks ...string) (*Schema) {
+func (s *SchemaManager) Register(p interface{}, pks ...string) *Schema {
 	reflectType := GetStructType(reflect.TypeOf(p))
 
 	schema := &Schema{Type: reflectType, TableName: ChangleName(reflectType.Name())}
@@ -118,7 +118,7 @@ func (s *Schema) setTablePrimaryKeys(fields ...string) {
 }
 
 // 添加表索引
-func (s *Schema) AddTableIdx(fields ...string) (*Schema) {
+func (s *Schema) AddTableIdx(fields ...string) *Schema {
 	if len(fields) == 0 {
 		return s
 	}
@@ -136,7 +136,7 @@ func (s *Schema) AddTableIdx(fields ...string) (*Schema) {
 }
 
 // 设置列时间类型, ct:数据库存储列类型, fields:属性名
-func (s *Schema) SetDateTimeColumnType(fields ...string) (*Schema) {
+func (s *Schema) SetDateTimeColumnType(fields ...string) *Schema {
 	for _, v := range fields {
 		f := s.GetField(v)
 		if f == nil {
@@ -150,7 +150,7 @@ func (s *Schema) SetDateTimeColumnType(fields ...string) (*Schema) {
 }
 
 // 设置列长度, l:数据库存储列长度, fields:属性名
-func (s *Schema) SetColumnLen(l int16, fields ...string) (*Schema) {
+func (s *Schema) SetColumnLen(l int16, fields ...string) *Schema {
 	for _, v := range fields {
 		f := s.GetField(v)
 		if f == nil {
@@ -162,7 +162,7 @@ func (s *Schema) SetColumnLen(l int16, fields ...string) (*Schema) {
 }
 
 // 设置列默认值, defaultValue:默认值, fields:属性名
-func (s *Schema) SetColumnDefaultValue(defaultValue string, fields ...string) (*Schema) {
+func (s *Schema) SetColumnDefaultValue(defaultValue string, fields ...string) *Schema {
 	for _, v := range fields {
 		f := s.GetField(v)
 		if f == nil {
@@ -174,7 +174,7 @@ func (s *Schema) SetColumnDefaultValue(defaultValue string, fields ...string) (*
 }
 
 // 设置自增列, fields:属性名, 注: 只有在新建表才有效
-func (s *Schema) SetAutoIncrementColumn(field string) (*Schema) {
+func (s *Schema) SetAutoIncrementColumn(field string) *Schema {
 	f := s.GetField(field)
 	if f == nil {
 		panic(errors.New(fmt.Sprintf("not exists field '%v'", field)))
@@ -185,7 +185,7 @@ func (s *Schema) SetAutoIncrementColumn(field string) (*Schema) {
 }
 
 // 设置分表存储, 服务器启动时会记录一个时间点, 当插入语句创建时间和记录点的间隔满足配置时,会重命名表名为分表表名, 重新创建新表插入
-func (s *Schema) SetSeparateTable(separateType EnumSeparateType) (*Schema) {
+func (s *Schema) SetSeparateTable(separateType EnumSeparateType) *Schema {
 	s.separateTable = &SeparateTable{
 		tableName:     s.TableName,
 		SeparateType:  separateType,
@@ -195,7 +195,7 @@ func (s *Schema) SetSeparateTable(separateType EnumSeparateType) (*Schema) {
 }
 
 // 设置列是否可为空(默认不可为空), columnNull:是否可为空, fields:属性名
-func (s *Schema) SetColumnNull(columnNull bool, fields ...string) (*Schema) {
+func (s *Schema) SetColumnNull(columnNull bool, fields ...string) *Schema {
 	for _, v := range fields {
 		f := s.GetField(v)
 		if f == nil {

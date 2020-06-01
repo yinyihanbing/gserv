@@ -1,13 +1,13 @@
 package storage
 
 import (
+	"database/sql"
+	"errors"
 	"fmt"
 	"reflect"
-	"time"
-	"errors"
-	"strings"
 	"strconv"
-	"database/sql"
+	"strings"
+	"time"
 
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/yinyihanbing/gutils"
@@ -402,7 +402,7 @@ func (this *DbCli) SelectMultiple(p interface{}, params map[string]interface{}) 
 }
 
 // 使用迭代的方式来读取数据库表多行数据
-func (this *DbCli) SelectScan(p interface{}, params map[string]interface{}, iterFunc func(v interface{}, err error) (bool)) (err error) {
+func (this *DbCli) SelectScan(p interface{}, params map[string]interface{}, iterFunc func(v interface{}, err error) bool) (err error) {
 	schema, err := this.sm.GetSchema(p)
 	if err != nil {
 		return err
@@ -417,7 +417,7 @@ func (this *DbCli) SelectScan(p interface{}, params map[string]interface{}, iter
 }
 
 // 使用迭代的方式来读取数据库表多行数据
-func (this *DbCli) SelectScanBySql(p interface{}, strSql string, iterFunc func(v interface{}, err error) (bool)) (err error) {
+func (this *DbCli) SelectScanBySql(p interface{}, strSql string, iterFunc func(v interface{}, err error) bool) (err error) {
 	schema, err := this.sm.GetSchema(p)
 	if err != nil {
 		return err
@@ -476,7 +476,7 @@ func (this *DbCli) AsyncInsert(p interface{}) {
 }
 
 // 异步更新数据
-func (this *DbCli) AsyncUpdate(p interface{}, fields ... string) {
+func (this *DbCli) AsyncUpdate(p interface{}, fields ...string) {
 	schema, err := this.sm.GetSchema(p)
 	if err != nil {
 		logs.Error(fmt.Sprintf("schema not exists: %v", p))
@@ -564,7 +564,7 @@ func (this *DbCli) SyncAllTableStruct() {
 }
 
 // 同步表结构
-func (this *DbCli) SyncTableStruct(p ... interface{}) {
+func (this *DbCli) SyncTableStruct(p ...interface{}) {
 	if p == nil {
 		return
 	}

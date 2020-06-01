@@ -1,10 +1,10 @@
 package module
 
 import (
-	"time"
 	"github.com/yinyihanbing/gserv/chanrpc"
 	"github.com/yinyihanbing/gserv/go"
 	"github.com/yinyihanbing/gutils/timer"
+	"time"
 )
 
 type Skeleton struct {

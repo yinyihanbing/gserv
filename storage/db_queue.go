@@ -2,9 +2,9 @@ package storage
 
 import (
 	"fmt"
+	"runtime"
 	"sync"
 	"time"
-	"runtime"
 
 	"github.com/garyburd/redigo/redis"
 	"github.com/yinyihanbing/gutils"

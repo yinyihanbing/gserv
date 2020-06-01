@@ -248,7 +248,7 @@ func CreateInsertSql(schema *Schema, p interface{}) (arrSql []string, err error)
 }
 
 // 更新表sql语句(条件默认列id), p:结构体引用
-func CreateUpdateSql(schema *Schema, p interface{}, fields ... string) (strSql string, err error) {
+func CreateUpdateSql(schema *Schema, p interface{}, fields ...string) (strSql string, err error) {
 	rv := reflect.ValueOf(p)
 	if rv.Kind() == reflect.Ptr {
 		rv = rv.Elem()

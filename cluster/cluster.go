@@ -1,16 +1,16 @@
 package cluster
 
 import (
-	"net"
 	"math"
-	"time"
+	"net"
 	"reflect"
+	"time"
 
+	"github.com/yinyihanbing/gserv/chanrpc"
 	"github.com/yinyihanbing/gserv/conf"
 	"github.com/yinyihanbing/gserv/network"
-	"github.com/yinyihanbing/gutils/logs"
-	"github.com/yinyihanbing/gserv/chanrpc"
 	"github.com/yinyihanbing/gserv/network/protobuf"
+	"github.com/yinyihanbing/gutils/logs"
 )
 
 var (

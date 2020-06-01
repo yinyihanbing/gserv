@@ -1,10 +1,10 @@
 package storage
 
 import (
-	"fmt"
-	"strings"
 	"errors"
+	"fmt"
 	"reflect"
+	"strings"
 
 	"github.com/yinyihanbing/gutils/logs"
 )
@@ -23,7 +23,7 @@ func (this *MgrBase) SetRedisKeyField(baseRedisKey string, ksName, fsName []stri
 }
 
 // 获取RedisKey
-func (this *MgrBase) GetRedisKeyWithVal(kvs ... interface{}) (string, error) {
+func (this *MgrBase) GetRedisKeyWithVal(kvs ...interface{}) (string, error) {
 	if len(kvs) != len(this.ksName) {
 		err := errors.New(fmt.Sprintf("缓存:%v, 键所包含的属性条数不匹配, 应包含属性：%v, 现属性值:%v", this.baseRedisKey, this.ksName, kvs))
 		logs.Error(err)
@@ -38,7 +38,7 @@ func (this *MgrBase) GetRedisKeyWithVal(kvs ... interface{}) (string, error) {
 }
 
 // 获取Redis域
-func (this *MgrBase) GetRedisFieldWithVal(fvs ... interface{}) (string, error) {
+func (this *MgrBase) GetRedisFieldWithVal(fvs ...interface{}) (string, error) {
 	if len(fvs) != len(this.fsName) {
 		err := errors.New(fmt.Sprintf("缓存:%v, 域所包含的属性条数不匹配, 应包含属性：%v, 现属性值:%v", this.baseRedisKey, this.fsName, fvs))
 		logs.Error(err)
@@ -192,7 +192,7 @@ func (this *MgrBase) ReloadDbDataToRedis(pSlice interface{}, dbQueryParams map[s
 }
 
 // DB和Redis 新增数据
-func (this *MgrBase) Add(p ... interface{}) bool {
+func (this *MgrBase) Add(p ...interface{}) bool {
 	if len(p) == 0 {
 		logs.Error("缓存:%v, add empty", this.baseRedisKey)
 		return false
@@ -224,7 +224,7 @@ func (this *MgrBase) Add(p ... interface{}) bool {
 }
 
 // DB和Redis 删除数据
-func (this *MgrBase) Delete(p ... interface{}) bool {
+func (this *MgrBase) Delete(p ...interface{}) bool {
 	if len(p) == 0 {
 		logs.Error("缓存:%v, delete empty", this.baseRedisKey)
 		return false
@@ -256,7 +256,7 @@ func (this *MgrBase) Delete(p ... interface{}) bool {
 }
 
 // DB和Redis 修改数据
-func (this *MgrBase) Update(columns []string, p ... interface{}) bool {
+func (this *MgrBase) Update(columns []string, p ...interface{}) bool {
 	if len(p) == 0 {
 		logs.Error(fmt.Sprintf("缓存:%v, update empty", this.baseRedisKey))
 		return false
@@ -441,7 +441,7 @@ func (this *MgrBase) IsFieldExists(kvs []interface{}, fvs []interface{}) (exists
 }
 
 // Redis 新增数据
-func (this *MgrBase) AddToRedis(p ... interface{}) bool {
+func (this *MgrBase) AddToRedis(p ...interface{}) bool {
 	if len(p) == 0 {
 		logs.Error("缓存:%v, add empty", this.baseRedisKey)
 		return false

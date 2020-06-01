@@ -3,10 +3,10 @@ package chanrpc
 import (
 	"errors"
 	"fmt"
-	"runtime"
-	"reflect"
 	"github.com/yinyihanbing/gserv/conf"
 	"github.com/yinyihanbing/gutils/logs"
+	"reflect"
+	"runtime"
 )
 
 // one server per goroutine (goroutine not safe)

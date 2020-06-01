@@ -5,9 +5,9 @@ import (
 	"os/signal"
 
 	"github.com/yinyihanbing/gserv/cluster"
+	"github.com/yinyihanbing/gserv/console"
 	"github.com/yinyihanbing/gserv/module"
 	"github.com/yinyihanbing/gserv/storage"
-	"github.com/yinyihanbing/gserv/console"
 	"github.com/yinyihanbing/gutils/logs"
 )
 

@@ -1,10 +1,10 @@
 package network
 
 import (
+	"github.com/yinyihanbing/gutils/logs"
 	"net"
 	"sync"
 	"time"
-	"github.com/yinyihanbing/gutils/logs"
 )
 
 // TCP服务配置

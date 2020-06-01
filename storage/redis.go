@@ -1,11 +1,11 @@
 package storage
 
 import (
-	"fmt"
-	"time"
-	"reflect"
 	"errors"
+	"fmt"
+	"reflect"
 	"strconv"
+	"time"
 
 	"github.com/garyburd/redigo/redis"
 	"github.com/golang/protobuf/proto"
@@ -360,7 +360,7 @@ func (this *RedisCli) DoIncr(key interface{}) (int64, error) {
 }
 
 // DEL 删除指定键, keys：一个或多个键
-func (this *RedisCli) DoDel(keys ... interface{}) error {
+func (this *RedisCli) DoDel(keys ...interface{}) error {
 	conn := this.pool.Get()
 	defer conn.Close()
 
@@ -373,7 +373,7 @@ func (this *RedisCli) DoDel(keys ... interface{}) error {
 }
 
 // HDEL 删除指定键域, key：键, fields：域
-func (this *RedisCli) DoHDel(key interface{}, fields ... interface{}) error {
+func (this *RedisCli) DoHDel(key interface{}, fields ...interface{}) error {
 	if len(fields) == 0 {
 		return nil
 	}
@@ -686,7 +686,7 @@ func (this *RedisCli) DoZRangeByScore(key interface{}, membersSlicePrt interface
 }
 
 // ZREM 移除有序集 key 中的一个或多个成员，不存在的成员将被忽略。, key：键, member: 一个或多个成员
-func (this *RedisCli) DoZRem(key interface{}, member ... interface{}) error {
+func (this *RedisCli) DoZRem(key interface{}, member ...interface{}) error {
 	conn := this.pool.Get()
 	defer conn.Close()
 
@@ -775,7 +775,7 @@ func (this *RedisCli) DoExpire(key interface{}, t int64) (err error) {
 }
 
 // 使用迭代方式读取数据, key:键 key=键, match=匹配条件,* 默认所有(例: *、*A、*A*、A*), pF:域指针, pV:值指针, iterFunc:迭代执行函数
-func (this *RedisCli) DoHScan(key interface{}, match string, pF, pV interface{}, iterFunc func(f interface{}, v interface{}, err error) (bool)) {
+func (this *RedisCli) DoHScan(key interface{}, match string, pF, pV interface{}, iterFunc func(f interface{}, v interface{}, err error) bool) {
 	conn := this.pool.Get()
 	defer conn.Close()
 
