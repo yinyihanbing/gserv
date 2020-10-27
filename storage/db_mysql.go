@@ -111,9 +111,14 @@ func CreateColumnMaxValueSql(tableName string, columnName string) (string, error
 
 // 创建表sql语句, schema:结构体概要信息
 func CreateNewTableSql(schema *Schema) (string, error) {
+	return CreateNewTableSqlWithTableName(schema, schema.TableName)
+}
+
+// 创建表sql语句, schema:结构体概要信息, tableName表名
+func CreateNewTableSqlWithTableName(schema *Schema, tableName string) (string, error) {
 	var buf bytes.Buffer
 	primaryKeys := make([]string, 0)
-	buf.WriteString(fmt.Sprintf("CREATE TABLE `%v` (", schema.TableName))
+	buf.WriteString(fmt.Sprintf("CREATE TABLE `%v` (", tableName))
 	for _, v := range schema.Fields {
 		// 列SQL
 		buf.WriteString(fmt.Sprintf("%v,", getColumnSql(schema, v)))
