@@ -7,7 +7,6 @@ import (
 	"github.com/yinyihanbing/gserv/cluster"
 	"github.com/yinyihanbing/gserv/console"
 	"github.com/yinyihanbing/gserv/module"
-	"github.com/yinyihanbing/gserv/storage"
 	"github.com/yinyihanbing/gutils/logs"
 )
 
@@ -37,5 +36,4 @@ func Run(mods ...module.Module) {
 func Stop() {
 	cluster.Destroy()
 	module.Destroy()
-	storage.Destroy()
 }
