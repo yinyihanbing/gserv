@@ -148,10 +148,10 @@ func (p *Processor) Unmarshal(data []byte) (interface{}, error) {
 	// msg
 	i := p.msgInfo[id]
 	if i.msgRawHandler != nil {
-		return MsgRaw{id, data[2:]}, nil
+		return MsgRaw{id, data[4:]}, nil
 	} else {
 		msg := reflect.New(i.msgType.Elem()).Interface()
-		return msg, proto.UnmarshalMerge(data[2:], msg.(proto.Message))
+		return msg, proto.UnmarshalMerge(data[4:], msg.(proto.Message))
 	}
 }
 
