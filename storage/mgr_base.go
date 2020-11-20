@@ -395,8 +395,13 @@ func (this *MgrBase) GetFieldsLen(kvs ...interface{}) (int64, error) {
 
 // 获取域列表, [0,n-1]为Redis键构造值, [n-1]为接收数据的容器引用
 func (this *MgrBase) GetFields(param ...interface{}) error {
-	if len(param) < 2 {
+	if len(param) < 1 {
 		err := errors.New(fmt.Sprintf("缓存:%v, 参数数量不正确:%v", this.baseRedisKey, param))
+		logs.Error(err)
+		return err
+	}
+	if reflect.TypeOf(param[len(param)-1]).Kind() != reflect.Ptr {
+		err := errors.New(fmt.Sprintf("缓存:%v, 参数类型不正确:%v", this.baseRedisKey, param))
 		logs.Error(err)
 		return err
 	}
