@@ -583,8 +583,13 @@ func (this *DbCli) SyncTableStruct(p ...interface{}) {
 	}
 }
 
-// 检测生成分表
+// 检测生成分表(异步)
 func (this *DbCli) CheckCreateSeparateTable(p interface{}) error {
+	return this.CreateSeparateTable(p, true)
+}
+
+// 检测生成分表(同步)
+func (this *DbCli) CreateSeparateTable(p interface{}, async bool) error {
 	schema, err := this.sm.GetSchema(p)
 	if err != nil {
 		logs.Error(fmt.Sprintf("schema not exists: %v", p))
@@ -606,7 +611,13 @@ func (this *DbCli) CheckCreateSeparateTable(p interface{}) error {
 		return nil
 	}
 	for _, v := range arrSeparateSql {
-		this.PutToQueue(v)
+		if async {
+			this.PutToQueue(v)
+		} else {
+			if _, err := this.Exec(v); err != nil {
+				return err
+			}
+		}
 	}
 	return nil
 }
