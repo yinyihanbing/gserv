@@ -136,6 +136,24 @@ func (this *RedisCli) DoGet(key interface{}) (v interface{}, err error) {
 	return ret, nil
 }
 
+// SET 扩展, key:键 prtProtoStruct:proto结构引用
+func (this *RedisCli) DoSetProto(key interface{}, prtProtoStruct interface{}) (err error) {
+	conn := this.pool.Get()
+	defer conn.Close()
+
+	bytes, err := proto.Marshal(prtProtoStruct.(proto.Message))
+	if err != nil {
+		logs.Error("Protobuf Marshal error:%v", err)
+		return err
+	}
+	_, err = conn.Do("SET", key, bytes)
+	if err != nil {
+		logs.Error("Redis Do SET error! err=%v", err)
+		return err
+	}
+	return nil
+}
+
 // GET, key:键 prtProtoStruct:proto结构引用
 func (this *RedisCli) DoGetProto(key interface{}, prtProtoStruct interface{}) (exists bool, err error) {
 	conn := this.pool.Get()
