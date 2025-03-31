@@ -2,7 +2,6 @@ package storage
 
 import (
 	"database/sql"
-	"errors"
 	"fmt"
 	"reflect"
 	"strconv"
@@ -14,39 +13,41 @@ import (
 	"github.com/yinyihanbing/gutils/logs"
 )
 
+// DbCli represents a database client with configuration, connection pool, and schema manager.
 type DbCli struct {
 	config  *DbConfig
 	db      *sql.DB
 	sm      *SchemaManager
-	dbQueue *DbQueue // 队列
-
-	DbName string // 数据库名
+	dbQueue *DbQueue
+	DbName  string
 }
 
+// DbConfig holds the configuration for database connection.
 type DbConfig struct {
-	StrAddr         string        // 连接串
-	ConnMaxLifetime time.Duration // 连接超时时间
-	MaxOpenConns    int           // 最大连接数
-	MaxIdleConns    int           // 最大空闲连接数
+	StrAddr         string
+	ConnMaxLifetime time.Duration
+	MaxOpenConns    int
+	MaxIdleConns    int
 
-	QueueType        DbQueueType // 队列类型
-	QueueRedisCliIdx int         // Redis连接池编号
-	QueueDbCliIdx    int         // Db连接池编号
-	QueueLimitCount  int         // sql队列上限数, 超过上限必需等待
+	QueueType        DbQueueType
+	QueueRedisCliIdx int
+	QueueDbCliIdx    int
+	QueueLimitCount  int
 }
 
-// 打开一个数据库连接池
+// newDbCli initializes a new database client with the given configuration.
+// returns the database client or an error if the connection fails.
 func newDbCli(cfg *DbConfig) (db *DbCli, err error) {
 	var d *sql.DB
 	d, err = sql.Open("mysql", cfg.StrAddr)
 	if err != nil {
 		logs.Error("mysql connection failed: %v %v", cfg.StrAddr, err)
-		return nil, err
+		return nil, fmt.Errorf("mysql connection failed: %v", err)
 	}
 	if err = d.Ping(); err != nil {
 		d.Close()
 		logs.Error("mysql connection failed: %v %v", cfg.StrAddr, err)
-		return nil, err
+		return nil, fmt.Errorf("mysql connection failed: %v", err)
 	}
 	if cfg.MaxIdleConns != 0 {
 		d.SetMaxIdleConns(cfg.MaxIdleConns)
@@ -65,13 +66,10 @@ func newDbCli(cfg *DbConfig) (db *DbCli, err error) {
 		db:     d,
 	}
 
-	// 初始化实体管理者
 	db.sm = newSchemaManager()
 
-	// 初始化数据库队列
 	db.dbQueue = NewDbQueue(cfg.QueueType, cfg.QueueRedisCliIdx, cfg.QueueDbCliIdx, cfg.QueueLimitCount)
 
-	// 数据库名
 	db.DbName = db.CurrentDatabase()
 
 	logs.Info("mysql connection success: %v", cfg.StrAddr)
@@ -79,38 +77,40 @@ func newDbCli(cfg *DbConfig) (db *DbCli, err error) {
 	return db, nil
 }
 
-func (this *DbCli) Destroy() {
-	this.dbQueue.Destroy()
+// Destroy closes the database connection and destroys the queue.
+func (dc *DbCli) Destroy() {
+	dc.dbQueue.Destroy()
 
-	if this.db != nil {
-		this.db.Close()
+	if dc.db != nil {
+		dc.db.Close()
 	}
 }
 
-// 启动数据库队列
-func (this *DbCli) StartQueue() {
-	this.dbQueue.StartQueueTask()
+// StartQueue starts the database queue task.
+func (dc *DbCli) StartQueue() {
+	dc.dbQueue.StartQueueTask()
 }
 
-// 获取连接的数据库名
-func (this *DbCli) CurrentDatabase() (name string) {
+// CurrentDatabase retrieves the name of the currently connected database.
+func (dc *DbCli) CurrentDatabase() (name string) {
 	strSql, err := CreateCurrentDatabaseSql()
 	if err != nil {
-		logs.Error(fmt.Sprintf("create sql error: %v", err))
+		logs.Error("create sql error: %v", err)
 		return
 	}
-	this.db.QueryRow(strSql).Scan(&name)
+	dc.db.QueryRow(strSql).Scan(&name)
 	return
 }
 
-// 获取数据库中的所有表名
-func (this *DbCli) GetAllTableNames() ([]string, error) {
-	strSql := CreateSelectTablesName(this.CurrentDatabase())
+// GetAllTableNames retrieves all table names from the current database.
+// returns a slice of table names or an error.
+func (dc *DbCli) GetAllTableNames() ([]string, error) {
+	strSql := CreateSelectTablesName(dc.CurrentDatabase())
 	logs.Debug("%v", strSql)
 
-	rows, err := this.QueryRow(strSql)
+	rows, err := dc.QueryRow(strSql)
 	if err != nil {
-		return nil, fmt.Errorf("sql error. %v, %v", strSql, err)
+		return nil, fmt.Errorf("sql error: %v, %v", strSql, err)
 	}
 	defer rows.Close()
 
@@ -119,7 +119,7 @@ func (this *DbCli) GetAllTableNames() ([]string, error) {
 		var col1 string
 		err = rows.Scan(&col1)
 		if err != nil {
-			return nil, fmt.Errorf("sql error. %v, %v", strSql, err)
+			return nil, fmt.Errorf("sql error: %v, %v", strSql, err)
 		}
 		tableNames = append(tableNames, col1)
 	}
@@ -127,14 +127,15 @@ func (this *DbCli) GetAllTableNames() ([]string, error) {
 	return tableNames, nil
 }
 
-// 查询数据库中表结构
-func (this *DbCli) GetTableStruct(tableName string) ([]*Field, error) {
+// GetTableStruct retrieves the structure of a specific table.
+// returns a slice of Field or an error.
+func (dc *DbCli) GetTableStruct(tableName string) ([]*Field, error) {
 	strSql := CreateSelectTableStruct(tableName)
 	logs.Debug("%v", strSql)
 
-	rows, err := this.QueryRow(strSql)
+	rows, err := dc.QueryRow(strSql)
 	if err != nil {
-		return nil, fmt.Errorf("sql error. %v, %v", strSql, err)
+		return nil, fmt.Errorf("sql error: %v, %v", strSql, err)
 	}
 	defer rows.Close()
 
@@ -144,11 +145,11 @@ func (this *DbCli) GetTableStruct(tableName string) ([]*Field, error) {
 		var col2 string
 		var col3 string
 		var col4 string
-		var col5 interface{}
-		var col6 interface{}
+		var col5 any
+		var col6 any
 		err = rows.Scan(&col1, &col2, &col3, &col4, &col5, &col6)
 		if err != nil {
-			return nil, fmt.Errorf("sql error. %v, %v", strSql, err)
+			return nil, fmt.Errorf("sql error: %v, %v", strSql, err)
 		}
 		f := Field{}
 		f.Name = col1
@@ -172,52 +173,55 @@ func (this *DbCli) GetTableStruct(tableName string) ([]*Field, error) {
 	return fields, nil
 }
 
-// 当前连接的数据库是否存在指定表
-func (this *DbCli) HasTable(tableName string) (bool, error) {
-	strSql, err := CreateHasTableSql(this.CurrentDatabase(), tableName)
+// HasTable checks if a specific table exists in the current database.
+// returns true if the table exists, otherwise false.
+func (dc *DbCli) HasTable(tableName string) (bool, error) {
+	strSql, err := CreateHasTableSql(dc.CurrentDatabase(), tableName)
 	if err != nil {
-		logs.Error(fmt.Sprintf("create sql error: %v", err))
+		logs.Error("create sql error: %v", err)
 		return false, err
 	}
 	logs.Debug("%v", strSql)
 	var count int
-	err = this.db.QueryRow(strSql).Scan(&count)
+	err = dc.db.QueryRow(strSql).Scan(&count)
 	if err != nil {
-		logs.Error("db exec %v err:%v", strSql, err)
-		return false, err
+		logs.Error("db exec %v err: %v", strSql, err)
+		return false, fmt.Errorf("db execution error: %v", err)
 	}
 	return count > 0, nil
 }
 
-// 获取表列中的最大值
-func (this *DbCli) SelectMaxValue(tableName string, columnName string) (int64, error) {
+// SelectMaxValue retrieves the maximum value of a specific column in a table.
+// returns the maximum value or an error.
+func (dc *DbCli) SelectMaxValue(tableName string, columnName string) (int64, error) {
 	strSql, err := CreateColumnMaxValueSql(tableName, columnName)
 	if err != nil {
-		logs.Error(fmt.Sprintf("create sql error: %v", err))
+		logs.Error("create sql error: %v", err)
 		return 0, err
 	}
 	logs.Debug("%v", strSql)
 	var count int64
-	err = this.db.QueryRow(strSql).Scan(&count)
+	err = dc.db.QueryRow(strSql).Scan(&count)
 	if err != nil {
-		logs.Error("db exec %v err:%v", strSql, err)
-		return 0, err
+		logs.Error("db exec %v err: %v", strSql, err)
+		return 0, fmt.Errorf("db execution error: %v", err)
 	}
 	return count, nil
 }
 
-// 查询多行数据
-func (this *DbCli) SelectRowScanBySql(strSql string, rowPrt interface{}, rowCall func(rowPrt interface{}) error) (err error) {
-	rows, errQuery := this.QueryRow(strSql)
+// SelectRowScanBySql executes a query and scans multiple rows into a provided structure.
+// rowCall is a callback function to process each row.
+func (dc *DbCli) SelectRowScanBySql(strSql string, rowPrt any, rowCall func(rowPrt any) error) (err error) {
+	rows, errQuery := dc.QueryRow(strSql)
 	if errQuery != nil {
-		return fmt.Errorf("sql error. %v, %v", strSql, errQuery)
+		return fmt.Errorf("sql error: %v, %v", strSql, errQuery)
 	}
 	defer rows.Close()
 
 	prtV := reflect.ValueOf(rowPrt).Elem()
 	pCount := prtV.NumField()
-	vContainer := make([]interface{}, pCount)
-	for i := 0; i < pCount; i++ {
+	vContainer := make([]any, pCount)
+	for i := range pCount {
 		f := prtV.Field(i)
 		vContainer[i] = reflect.New(f.Type()).Interface()
 	}
@@ -227,7 +231,7 @@ func (this *DbCli) SelectRowScanBySql(strSql string, rowPrt interface{}, rowCall
 			if err = rows.Scan(vContainer...); err != nil {
 				break
 			}
-			for i := 0; i < pCount; i++ {
+			for i := range pCount {
 				prtV.Field(i).Set(reflect.ValueOf(vContainer[i]).Elem())
 			}
 			if err = rowCall(rowPrt); err != nil {
@@ -239,52 +243,54 @@ func (this *DbCli) SelectRowScanBySql(strSql string, rowPrt interface{}, rowCall
 	return err
 }
 
-// 当前连接的数据库表是否存在指定列
-func (this *DbCli) HasColumn(tableName string, columnName string) (bool, error) {
-	strSql, err := CreateHasColumnSql(this.CurrentDatabase(), tableName, columnName)
+// HasColumn checks if a specific column exists in a table.
+// returns true if the column exists, otherwise false.
+func (dc *DbCli) HasColumn(tableName string, columnName string) (bool, error) {
+	strSql, err := CreateHasColumnSql(dc.CurrentDatabase(), tableName, columnName)
 	if err != nil {
-		logs.Error(fmt.Sprintf("Create sql error: %v", err))
+		logs.Error("create sql error: %v", err)
 		return false, err
 	}
 	logs.Debug("%v", strSql)
 	var count int
-	err = this.db.QueryRow(strSql).Scan(&count)
+	err = dc.db.QueryRow(strSql).Scan(&count)
 	if err != nil {
-		logs.Error("db exec %v err:%v", strSql, err)
-		return false, err
+		logs.Error("db exec %v err: %v", strSql, err)
+		return false, fmt.Errorf("db execution error: %v", err)
 	}
 	return count > 0, nil
 }
 
-// 执行sql语句
-func (this *DbCli) Exec(query string, args ...interface{}) (sql.Result, error) {
-	result, err := this.db.Exec(query, args...)
+// Exec executes a SQL query with optional arguments.
+// returns the result or an error.
+func (dc *DbCli) Exec(query string, args ...any) (sql.Result, error) {
+	result, err := dc.db.Exec(query, args...)
 	if err != nil {
-		return nil, fmt.Errorf("%v; %v", query, err)
+		return nil, fmt.Errorf("execution error: %v; %v", query, err)
 	}
 	logs.Debug("%v", query)
 	return result, nil
 }
 
-// 查询多行数据
-func (this *DbCli) QueryRow(query string, args ...interface{}) (*sql.Rows, error) {
-	return this.db.Query(query, args...)
+// QueryRow executes a query and returns multiple rows.
+func (dc *DbCli) QueryRow(query string, args ...any) (*sql.Rows, error) {
+	return dc.db.Query(query, args...)
 }
 
-// 查询单行数据
-func (this *DbCli) Query(query string, args ...interface{}) *sql.Row {
-	row := this.db.QueryRow(query, args...)
+// Query executes a query and returns a single row.
+func (dc *DbCli) Query(query string, args ...any) *sql.Row {
+	row := dc.db.QueryRow(query, args...)
 	return row
 }
 
-// 查询单行数据, p: 结构实例指针 *mystruct{}, strSql=sql查询脚本
-func (this *DbCli) SelectSingleBySql(p interface{}, strSql string) (err error) {
-	schema, err := this.sm.GetSchema(p)
+// SelectSingleBySql retrieves a single row based on a SQL query and maps it to the provided structure.
+func (dc *DbCli) SelectSingleBySql(p any, strSql string) (err error) {
+	schema, err := dc.sm.GetSchema(p)
 	if err != nil {
 		return err
 	}
 	vContainer := GetValueContainer(schema)
-	row := this.Query(strSql)
+	row := dc.Query(strSql)
 	if row != nil {
 		err = row.Scan(vContainer...)
 		if err != nil {
@@ -296,9 +302,9 @@ func (this *DbCli) SelectSingleBySql(p interface{}, strSql string) (err error) {
 	return err
 }
 
-// 查询单行数据, p: 结构实例指针, params: 查询条件(列名-值)  p支持示例： *mystruct{}
-func (this *DbCli) SelectSingle(p interface{}, params map[string]interface{}) (err error) {
-	schema, err := this.sm.GetSchema(p)
+// SelectSingle retrieves a single row based on query parameters and maps it to the provided structure.
+func (dc *DbCli) SelectSingle(p any, params map[string]any) (err error) {
+	schema, err := dc.sm.GetSchema(p)
 	if err != nil {
 		return err
 	}
@@ -309,12 +315,12 @@ func (this *DbCli) SelectSingle(p interface{}, params map[string]interface{}) (e
 		return err
 	}
 
-	return this.SelectSingleBySql(p, strSql)
+	return dc.SelectSingleBySql(p, strSql)
 }
 
-// 查询单行数据, p: 结构实例指针, where: 查询条件
-func (this *DbCli) SelectSingleByWhere(p interface{}, where string) (err error) {
-	schema, err := this.sm.GetSchema(p)
+// SelectSingleByWhere retrieves a single row based on a where clause and maps it to the provided structure.
+func (dc *DbCli) SelectSingleByWhere(p any, where string) (err error) {
+	schema, err := dc.sm.GetSchema(p)
 	if err != nil {
 		return err
 	}
@@ -327,20 +333,20 @@ func (this *DbCli) SelectSingleByWhere(p interface{}, where string) (err error) 
 
 	strSql = fmt.Sprintf("%v where %v", strSql, where)
 
-	return this.SelectSingleBySql(p, strSql)
+	return dc.SelectSingleBySql(p, strSql)
 }
 
-// 查询多行数据, p: slice或map ,p支持示例： *[]mystruct{}  *[]*mystruct{}  []*mystruct{}  []mystruct{}, sql:sql语句
-func (this *DbCli) SelectMultipleBySql(p interface{}, strSql string) (err error) {
-	schema, err := this.sm.GetSchema(p)
+// SelectMultipleBySql retrieves multiple rows based on a SQL query and maps them to the provided structure.
+func (dc *DbCli) SelectMultipleBySql(p any, strSql string) (err error) {
+	schema, err := dc.sm.GetSchema(p)
 	if err != nil {
 		return err
 	}
 
 	vContainer := GetValueContainer(schema)
-	rows, errQuery := this.QueryRow(strSql)
+	rows, errQuery := dc.QueryRow(strSql)
 	if errQuery != nil {
-		return fmt.Errorf("sql error. %v, %v", strSql, errQuery)
+		return fmt.Errorf("sql error: %v, %v", strSql, errQuery)
 	}
 	defer rows.Close()
 
@@ -386,9 +392,9 @@ func (this *DbCli) SelectMultipleBySql(p interface{}, strSql string) (err error)
 	return err
 }
 
-// 查询多行数据, p: slice或map, params: 查询条件(列名-值) p支持示例： *[]mystruct{}  *[]*mystruct{}
-func (this *DbCli) SelectMultiple(p interface{}, params map[string]interface{}) (err error) {
-	schema, err := this.sm.GetSchema(p)
+// SelectMultiple retrieves multiple rows based on query parameters and maps them to the provided structure.
+func (dc *DbCli) SelectMultiple(p any, params map[string]any) (err error) {
+	schema, err := dc.sm.GetSchema(p)
 	if err != nil {
 		return err
 	}
@@ -398,12 +404,12 @@ func (this *DbCli) SelectMultiple(p interface{}, params map[string]interface{}) 
 		return err
 	}
 
-	return this.SelectMultipleBySql(p, strSql)
+	return dc.SelectMultipleBySql(p, strSql)
 }
 
-// 使用迭代的方式来读取数据库表多行数据
-func (this *DbCli) SelectScan(p interface{}, params map[string]interface{}, iterFunc func(v interface{}, err error) bool) (err error) {
-	schema, err := this.sm.GetSchema(p)
+// SelectScan iterates over multiple rows and processes each row using the provided callback function.
+func (dc *DbCli) SelectScan(p any, params map[string]any, iterFunc func(v any, err error) bool) (err error) {
+	schema, err := dc.sm.GetSchema(p)
 	if err != nil {
 		return err
 	}
@@ -413,20 +419,20 @@ func (this *DbCli) SelectScan(p interface{}, params map[string]interface{}, iter
 		return err
 	}
 
-	return this.SelectScanBySql(p, strSql, iterFunc)
+	return dc.SelectScanBySql(p, strSql, iterFunc)
 }
 
-// 使用迭代的方式来读取数据库表多行数据
-func (this *DbCli) SelectScanBySql(p interface{}, strSql string, iterFunc func(v interface{}, err error) bool) (err error) {
-	schema, err := this.sm.GetSchema(p)
+// SelectScanBySql iterates over multiple rows based on a SQL query and processes each row using the provided callback function.
+func (dc *DbCli) SelectScanBySql(p any, strSql string, iterFunc func(v any, err error) bool) (err error) {
+	schema, err := dc.sm.GetSchema(p)
 	if err != nil {
 		return err
 	}
 
 	vContainer := GetValueContainer(schema)
-	rows, errQuery := this.QueryRow(strSql)
+	rows, errQuery := dc.QueryRow(strSql)
 	if errQuery != nil {
-		return fmt.Errorf("sql error. %v, %v", strSql, errQuery)
+		return fmt.Errorf("sql error: %v, %v", strSql, errQuery)
 	}
 	defer rows.Close()
 
@@ -451,91 +457,91 @@ func (this *DbCli) SelectScanBySql(p interface{}, strSql string, iterFunc func(v
 	return err
 }
 
-// 将sql语句放入队列
-func (this *DbCli) PutToQueue(strSql string) {
-	this.dbQueue.PutToQueue(strSql)
+// PutToQueue adds a SQL query to the database queue for asynchronous execution.
+func (dc *DbCli) PutToQueue(strSql string) {
+	dc.dbQueue.PutToQueue(strSql)
 }
 
-// 异步插入数据
-func (this *DbCli) AsyncInsert(p interface{}) {
-	schema, err := this.sm.GetSchema(p)
+// AsyncInsert inserts data asynchronously into the database.
+func (dc *DbCli) AsyncInsert(p any) {
+	schema, err := dc.sm.GetSchema(p)
 	if err != nil {
-		logs.Error(fmt.Sprintf("schema not exists: %v", p))
+		logs.Error("schema not exists: %v", p)
 		return
 	}
 
 	arrSql, err := CreateInsertSql(schema, p)
 	if err != nil {
-		logs.Error(fmt.Sprintf("create sql error: %v", err))
+		logs.Error("create sql error: %v", err)
 		return
 	}
 
 	for _, v := range arrSql {
-		this.PutToQueue(v)
+		dc.PutToQueue(v)
 	}
 }
 
-// 异步更新数据
-func (this *DbCli) AsyncUpdate(p interface{}, fields ...string) {
-	schema, err := this.sm.GetSchema(p)
+// AsyncUpdate updates data asynchronously in the database.
+func (dc *DbCli) AsyncUpdate(p any, fields ...string) {
+	schema, err := dc.sm.GetSchema(p)
 	if err != nil {
-		logs.Error(fmt.Sprintf("schema not exists: %v", p))
+		logs.Error("schema not exists: %v", p)
 		return
 	}
 
 	strSql, err := CreateUpdateSql(schema, p, fields...)
 	if err != nil {
-		logs.Error(fmt.Sprintf("create sql error: %v", err))
+		logs.Error("create sql error: %v", err)
 		return
 	}
-	this.PutToQueue(strSql)
+	dc.PutToQueue(strSql)
 }
 
-// 异步删除数据
-func (this *DbCli) AsyncDelete(p interface{}) {
-	schema, err := this.sm.GetSchema(p)
+// AsyncDelete deletes data asynchronously from the database.
+func (dc *DbCli) AsyncDelete(p any) {
+	schema, err := dc.sm.GetSchema(p)
 	if err != nil {
-		logs.Error(fmt.Sprintf("schema not exists: %v", p))
+		logs.Error("schema not exists: %v", p)
 		return
 	}
 
 	strSql, err := CreateDeleteSql(schema, p)
 	if err != nil {
-		logs.Error(fmt.Sprintf("create sql error: %v", err))
+		logs.Error("create sql error: %v", err)
 		return
 	}
-	this.PutToQueue(strSql)
+	dc.PutToQueue(strSql)
 }
 
-// 结构体管理
-func (this *DbCli) GetSchemaManager() *SchemaManager {
-	return this.sm
+// GetSchemaManager retrieves the schema manager associated with the database client.
+func (dc *DbCli) GetSchemaManager() *SchemaManager {
+	return dc.sm
 }
 
-// 同步表结构
-func (this *DbCli) syncTableStruct(hasTablesName []string, schema *Schema) {
+// syncTableStruct synchronizes the structure of a table with the database schema.
+func (dc *DbCli) syncTableStruct(hasTablesName []string, schema *Schema) {
 	if gutils.ContainSVStr(hasTablesName, schema.TableName) {
-		fields, err := this.GetTableStruct(schema.TableName)
+		fields, err := dc.GetTableStruct(schema.TableName)
 		if err != nil {
 			logs.Fatal(err)
 		}
 		addColumnSqls := CreateTableAddColumnSql(schema, fields)
 		for _, v := range addColumnSqls {
-			_, err = this.Exec(v)
+			_, err = dc.Exec(v)
 			if err != nil {
 				logs.Fatal(err)
 			}
 		}
 
 		if len(addColumnSqls) > 0 {
-			fields, err = this.GetTableStruct(schema.TableName)
+			fields, err = dc.GetTableStruct(schema.TableName)
 			if err != nil {
 				logs.Fatal(err)
 			}
 		}
 		modifyColumnSqls := CreateTableModifyColumnSql(schema, fields)
 		for _, v := range modifyColumnSqls {
-			_, err = this.Exec(v)
+			_, err = dc.Exec(v)
 			if err != nil {
 				logs.Fatal(err)
 			}
@@ -543,66 +549,64 @@ func (this *DbCli) syncTableStruct(hasTablesName []string, schema *Schema) {
 	} else {
 		strSql, err := CreateNewTableSql(schema)
 		if err != nil {
-			logs.Fatal(errors.New(fmt.Sprintf("sync table struct error: %v", err)))
+			logs.Fatal(fmt.Errorf("sync table struct error: %v", err))
 		}
-		_, err = this.Exec(strSql)
+		_, err = dc.Exec(strSql)
 		if err != nil {
 			logs.Fatal(err)
 		}
 	}
 }
 
-// 同步表结构
-func (this *DbCli) SyncAllTableStruct() {
-	hasTablesName, err := this.GetAllTableNames()
+// SyncAllTableStruct synchronizes the structure of all tables with the database schema.
+func (dc *DbCli) SyncAllTableStruct() {
+	hasTablesName, err := dc.GetAllTableNames()
 	if err != nil {
 		panic(err)
 	}
-	for _, v := range this.sm.GetAllSchema() {
-		this.syncTableStruct(hasTablesName, v)
+	for _, v := range dc.sm.GetAllSchema() {
+		dc.syncTableStruct(hasTablesName, v)
 	}
 }
 
-// 同步表结构
-func (this *DbCli) SyncTableStruct(p ...interface{}) {
+// SyncTableStruct synchronizes the structure of specific tables with the database schema.
+func (dc *DbCli) SyncTableStruct(p ...any) {
 	if p == nil {
 		return
 	}
 
-	hasTablesName, err := this.GetAllTableNames()
+	hasTablesName, err := dc.GetAllTableNames()
 	if err != nil {
 		panic(err)
 	}
 
 	for _, v := range p {
-		s, err := this.sm.GetSchema(v)
+		s, err := dc.sm.GetSchema(v)
 		if err != nil {
 			panic(err)
 		}
-		this.syncTableStruct(hasTablesName, s)
+		dc.syncTableStruct(hasTablesName, s)
 	}
 }
 
-// 检测生成分表(异步)
-func (this *DbCli) CheckCreateSeparateTable(p interface{}) error {
-	return this.CreateSeparateTable(p, true)
+// CheckCreateSeparateTable checks and creates a separate table asynchronously if needed.
+func (dc *DbCli) CheckCreateSeparateTable(p any) error {
+	return dc.CreateSeparateTable(p, true)
 }
 
-// 检测生成分表(同步)
-func (this *DbCli) CreateSeparateTable(p interface{}, async bool) error {
-	schema, err := this.sm.GetSchema(p)
+// CreateSeparateTable creates a separate table synchronously or asynchronously based on the async flag.
+func (dc *DbCli) CreateSeparateTable(p any, async bool) error {
+	schema, err := dc.sm.GetSchema(p)
 	if err != nil {
-		logs.Error(fmt.Sprintf("schema not exists: %v", p))
+		logs.Error("schema not exists: %v", p)
 		return err
 	}
 
-	// 获取表名(如果有分表, 需要处理分表表名)
 	isSeparate, separateTableName := schema.GetSeparateTableName()
-	if isSeparate == false {
+	if !isSeparate {
 		return nil
 	}
 
-	// 获取生成分表的Sql语句
 	arrSeparateSql, err := CreateSeparateTableSql(schema, separateTableName)
 	if err != nil {
 		return err
@@ -612,9 +616,9 @@ func (this *DbCli) CreateSeparateTable(p interface{}, async bool) error {
 	}
 	for _, v := range arrSeparateSql {
 		if async {
-			this.PutToQueue(v)
+			dc.PutToQueue(v)
 		} else {
-			if _, err := this.Exec(v); err != nil {
+			if _, err := dc.Exec(v); err != nil {
 				return err
 			}
 		}

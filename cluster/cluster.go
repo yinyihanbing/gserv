@@ -21,9 +21,11 @@ var (
 	Processor    *protobuf.Processor
 )
 
+// Init initializes the cluster by starting the server and connecting clients.
 func Init() {
 	if conf.ListenAddr != "" {
 		server = new(network.TCPServer)
+		// configure server settings
 		server.Addr = conf.ListenAddr
 		server.MaxConnNum = int(math.MaxInt32)
 		server.PendingWriteNum = conf.PendingWriteNum
@@ -33,11 +35,12 @@ func Init() {
 
 		server.Start()
 
-		logs.Info("Game cluster Service startup: %v", conf.ListenAddr)
+		logs.Info("game cluster service startup: %v", conf.ListenAddr)
 	}
 
 	for _, addr := range conf.ConnAddrs {
 		client := new(network.TCPClient)
+		// configure client settings
 		client.Addr = addr
 		client.ConnNum = 1
 		client.ConnectInterval = 3 * time.Second
@@ -50,10 +53,11 @@ func Init() {
 		client.Start()
 		clients = append(clients, client)
 
-		logs.Info("Game client Service startup: %v", addr)
+		logs.Info("game client service startup: %v", addr)
 	}
 }
 
+// Destroy stops the server and closes all client connections.
 func Destroy() {
 	if server != nil {
 		server.Close()
@@ -64,11 +68,13 @@ func Destroy() {
 	}
 }
 
+// Agent represents a network connection agent.
 type Agent struct {
-	conn     *network.TCPConn
-	userData interface{}
+	conn     *network.TCPConn // underlying TCP connection
+	userData interface{}      // user-specific data
 }
 
+// newAgent creates a new Agent instance.
 func newAgent(conn *network.TCPConn) network.Agent {
 	a := new(Agent)
 	a.conn = conn
@@ -76,10 +82,12 @@ func newAgent(conn *network.TCPConn) network.Agent {
 	return a
 }
 
+// Run processes incoming messages for the agent.
 func (a *Agent) Run() {
 	for {
 		data, err := a.conn.ReadMsg()
 		if err != nil {
+			logs.Error("read message error: %v", err)
 			break
 		}
 		if Processor != nil {
@@ -98,6 +106,7 @@ func (a *Agent) Run() {
 	}
 }
 
+// OnClose handles cleanup when the agent's connection is closed.
 func (a *Agent) OnClose() {
 	if AgentChanRPC != nil {
 		err := AgentChanRPC.Call0("CloseAgent", a)
@@ -107,6 +116,7 @@ func (a *Agent) OnClose() {
 	}
 }
 
+// WriteMsg sends a message to the agent's connection.
 func (a *Agent) WriteMsg(msg interface{}) {
 	if Processor != nil {
 		data, err := Processor.Marshal(msg)
@@ -121,26 +131,32 @@ func (a *Agent) WriteMsg(msg interface{}) {
 	}
 }
 
+// LocalAddr returns the local address of the agent's connection.
 func (a *Agent) LocalAddr() net.Addr {
 	return a.conn.LocalAddr()
 }
 
+// RemoteAddr returns the remote address of the agent's connection.
 func (a *Agent) RemoteAddr() net.Addr {
 	return a.conn.RemoteAddr()
 }
 
+// Close closes the agent's connection.
 func (a *Agent) Close() {
 	a.conn.Close()
 }
 
+// Destroy forcibly destroys the agent's connection.
 func (a *Agent) Destroy() {
 	a.conn.Destroy()
 }
 
+// UserData retrieves the user-specific data associated with the agent.
 func (a *Agent) UserData() interface{} {
 	return a.userData
 }
 
+// SetUserData sets the user-specific data for the agent.
 func (a *Agent) SetUserData(data interface{}) {
 	a.userData = data
 }

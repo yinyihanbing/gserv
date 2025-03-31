@@ -29,9 +29,11 @@ type Gate struct {
 	LittleEndian bool
 }
 
+// Run starts the websocket and TCP servers if configured, and waits for a close signal.
 func (gate *Gate) Run(closeSig chan bool) {
 	var wsServer *network.WSServer
 	if gate.WSAddr != "" {
+		// initialize websocket server
 		wsServer = new(network.WSServer)
 		wsServer.Addr = gate.WSAddr
 		wsServer.MaxConnNum = gate.MaxConnNum
@@ -51,6 +53,7 @@ func (gate *Gate) Run(closeSig chan bool) {
 
 	var tcpServer *network.TCPServer
 	if gate.TCPAddr != "" {
+		// initialize tcp server
 		tcpServer = new(network.TCPServer)
 		tcpServer.Addr = gate.TCPAddr
 		tcpServer.MaxConnNum = gate.MaxConnNum
@@ -67,33 +70,40 @@ func (gate *Gate) Run(closeSig chan bool) {
 		}
 	}
 
+	// start websocket server if configured
 	if wsServer != nil {
 		wsServer.Start()
-		logs.Info("Game WS Service startup: %v", wsServer.Addr)
+		logs.Info("game ws service startup: %v", wsServer.Addr)
 	}
+	// start tcp server if configured
 	if tcpServer != nil {
 		tcpServer.Start()
-		logs.Info("Game TCP Service startup: %v", tcpServer.Addr)
+		logs.Info("game tcp service startup: %v", tcpServer.Addr)
 	}
+	// wait for close signal
 	<-closeSig
+	// stop websocket server if running
 	if wsServer != nil {
 		wsServer.Close()
-		logs.Info("Game WS Service stopped: %v", wsServer.Addr)
+		logs.Info("game ws service stopped: %v", wsServer.Addr)
 	}
+	// stop tcp server if running
 	if tcpServer != nil {
 		tcpServer.Close()
-		logs.Info("Game TCP Service stopped: %v", tcpServer.Addr)
+		logs.Info("game tcp service stopped: %v", tcpServer.Addr)
 	}
 }
 
+// OnDestroy is a placeholder for cleanup logic when the gate is destroyed.
 func (gate *Gate) OnDestroy() {}
 
 type agent struct {
 	conn     network.Conn
 	gate     *Gate
-	userData interface{}
+	userData any
 }
 
+// Run is the main loop for reading and processing messages from the connection.
 func (a *agent) Run() {
 	for {
 		data, err := a.conn.ReadMsg()
@@ -101,6 +111,7 @@ func (a *agent) Run() {
 			break
 		}
 		if a.gate.Processor != nil {
+			// unmarshal and route the message
 			msg, err := a.gate.Processor.Unmarshal(data)
 			if err != nil {
 				logs.Debug("unmarshal message error: %v", err)
@@ -115,6 +126,7 @@ func (a *agent) Run() {
 	}
 }
 
+// OnClose handles the closure of the agent and notifies the RPC server if configured.
 func (a *agent) OnClose() {
 	if a.gate.AgentChanRPC != nil {
 		err := a.gate.AgentChanRPC.Call0("CloseAgent", a)
@@ -124,7 +136,8 @@ func (a *agent) OnClose() {
 	}
 }
 
-func (a *agent) WriteMsg(msg interface{}) {
+// WriteMsg marshals the message and writes it to the connection.
+func (a *agent) WriteMsg(msg any) {
 	if a.gate.Processor != nil {
 		data, err := a.gate.Processor.Marshal(msg)
 		if err != nil {
@@ -138,26 +151,32 @@ func (a *agent) WriteMsg(msg interface{}) {
 	}
 }
 
+// LocalAddr returns the local address of the connection.
 func (a *agent) LocalAddr() net.Addr {
 	return a.conn.LocalAddr()
 }
 
+// RemoteAddr returns the remote address of the connection.
 func (a *agent) RemoteAddr() net.Addr {
 	return a.conn.RemoteAddr()
 }
 
+// Close closes the connection.
 func (a *agent) Close() {
 	a.conn.Close()
 }
 
+// Destroy destroys the connection.
 func (a *agent) Destroy() {
 	a.conn.Destroy()
 }
 
-func (a *agent) UserData() interface{} {
+// UserData returns the user data associated with the agent.
+func (a *agent) UserData() any {
 	return a.userData
 }
 
-func (a *agent) SetUserData(data interface{}) {
+// SetUserData sets the user data associated with the agent.
+func (a *agent) SetUserData(data any) {
 	a.userData = data
 }

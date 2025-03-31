@@ -13,6 +13,7 @@ import (
 
 var server *network.TCPServer
 
+// Init initializes the console service if the console port is configured.
 func Init() {
 	if conf.ConsolePort == 0 {
 		return
@@ -25,13 +26,14 @@ func Init() {
 
 	server.Start()
 
-	logs.Info("Game Console Service startup: %v", server.Addr)
+	logs.Info("game console service startup: %v", server.Addr)
 }
 
+// Destroy stops the console service and releases resources.
 func Destroy() {
 	if server != nil {
 		server.Close()
-		logs.Info("Game Console Service stopped: %v", server.Addr)
+		logs.Info("game console service stopped: %v", server.Addr)
 	}
 }
 
@@ -40,6 +42,7 @@ type Agent struct {
 	reader *bufio.Reader
 }
 
+// newAgent creates a new Agent instance for handling console connections.
 func newAgent(conn *network.TCPConn) network.Agent {
 	a := new(Agent)
 	a.conn = conn
@@ -47,19 +50,22 @@ func newAgent(conn *network.TCPConn) network.Agent {
 	return a
 }
 
+// Run handles incoming commands from the console connection.
 func (a *Agent) Run() {
 	for {
+		// Display the console prompt if configured.
 		if conf.ConsolePrompt != "" {
 			a.conn.Write([]byte(conf.ConsolePrompt))
 		}
 
+		// Read a line of input from the console.
 		line, err := a.reader.ReadString('\n')
-
 		if err != nil {
 			break
 		}
 		line = strings.TrimSuffix(line[:len(line)-1], "\r")
 
+		// Parse the input into command arguments.
 		args := strings.Fields(line)
 		if len(args) == 0 {
 			continue
@@ -67,6 +73,8 @@ func (a *Agent) Run() {
 		if args[0] == "quit" {
 			break
 		}
+
+		// Find and execute the corresponding command.
 		var c Command
 		for _, _c := range commands {
 			if _c.name() == args[0] {
@@ -85,4 +93,7 @@ func (a *Agent) Run() {
 	}
 }
 
-func (a *Agent) OnClose() {}
+// OnClose is called when the connection is closed.
+func (a *Agent) OnClose() {
+	// No specific cleanup required for now.
+}

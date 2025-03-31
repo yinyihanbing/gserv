@@ -1,7 +1,6 @@
 package storage
 
 import (
-	"errors"
 	"fmt"
 	"go/ast"
 	"reflect"
@@ -14,34 +13,36 @@ type SchemaManager struct {
 	schemas map[reflect.Type]*Schema
 }
 
-// 结构体信息
+// Schema represents the structure information of a database table.
 type Schema struct {
 	Type          reflect.Type
 	TableName     string
 	Fields        []*Field
 	IndexKeys     [][]string
-	separateTable *SeparateTable // 分表存储配置(不分表为nil)
+	separateTable *SeparateTable // configuration for table sharding (nil if no sharding)
 }
 
+// Field represents the metadata of a database column.
 type Field struct {
 	Name               string
 	Type               reflect.Type
-	ColumnName         string         // 列名
-	ColumnType         EnumColumnType // 列类型
-	ColumnLength       int16          // 长度
-	ColumnNull         bool           // 可为空
-	ColumnDefaultValue string         // 默认值
-	PrimaryKey         bool           // 主键
-	AutoIncrement      bool           // 自增
+	ColumnName         string         // column name
+	ColumnType         EnumColumnType // column type
+	ColumnLength       int16          // length
+	ColumnNull         bool           // nullable
+	ColumnDefaultValue string         // default value
+	PrimaryKey         bool           // primary key
+	AutoIncrement      bool           // auto-increment
 }
 
+// newSchemaManager initializes a new SchemaManager instance.
 func newSchemaManager() *SchemaManager {
 	s := &SchemaManager{}
 	s.schemas = map[reflect.Type]*Schema{}
 	return s
 }
 
-// 注册结构体概要信息, pks:主键属性名...
+// Register registers the schema of a struct. pks: primary key field names.
 func (s *SchemaManager) Register(p interface{}, pks ...string) *Schema {
 	reflectType := GetStructType(reflect.TypeOf(p))
 
@@ -57,12 +58,20 @@ func (s *SchemaManager) Register(p interface{}, pks ...string) *Schema {
 			cName = ChangleName(fieldStruct.Name)
 			cType, cLength, cDefaultValue, err = getColumnType(fieldStruct.Type)
 			if err != nil {
-				panic(fmt.Errorf("register schema error! struct: %v, error: %v", reflectType.Name(), err))
+				panic(fmt.Errorf("register schema error: struct %v, error %v", reflectType.Name(), err))
 			}
-			schema.Fields = append(schema.Fields, &Field{Name: fieldStruct.Name, Type: fieldStruct.Type, ColumnName: cName, ColumnType: cType, ColumnLength: cLength, ColumnDefaultValue: cDefaultValue, PrimaryKey: false})
+			schema.Fields = append(schema.Fields, &Field{
+				Name:               fieldStruct.Name,
+				Type:               fieldStruct.Type,
+				ColumnName:         cName,
+				ColumnType:         cType,
+				ColumnLength:       cLength,
+				ColumnDefaultValue: cDefaultValue,
+				PrimaryKey:         false,
+			})
 		}
 	}
-	// 设置主键
+	// set primary keys
 	schema.setTablePrimaryKeys(pks...)
 
 	s.schemas[schema.Type] = schema
@@ -71,20 +80,21 @@ func (s *SchemaManager) Register(p interface{}, pks ...string) *Schema {
 	return schema
 }
 
+// GetAllSchema returns all registered schemas.
 func (s *SchemaManager) GetAllSchema() map[reflect.Type]*Schema {
 	return s.schemas
 }
 
-// 获取结构体概述, p:类型引用
+// GetSchema retrieves the schema of a given struct type.
 func (s *SchemaManager) GetSchema(p interface{}) (*Schema, error) {
 	reflectType := GetStructType(reflect.TypeOf(p))
 	if v, ok := s.schemas[reflectType]; ok {
 		return v, nil
 	}
-	return nil, fmt.Errorf("schema not exists: %v", reflectType)
+	return nil, fmt.Errorf("schema does not exist: %v", reflectType)
 }
 
-// 获取分表名称
+// GetSeparateTableName returns whether the table is sharded and the sharded table name.
 func (s *Schema) GetSeparateTableName() (isSeparate bool, separateTableName string) {
 	if s.separateTable == nil {
 		return false, ""
@@ -92,7 +102,7 @@ func (s *Schema) GetSeparateTableName() (isSeparate bool, separateTableName stri
 	return s.separateTable.IsNowSeparate()
 }
 
-// 查找字段
+// GetField finds a field by its name.
 func (s *Schema) GetField(field string) *Field {
 	for _, f := range s.Fields {
 		if f.Name == field {
@@ -102,7 +112,7 @@ func (s *Schema) GetField(field string) *Field {
 	return nil
 }
 
-// 设置表主键(主键自动增加索引)
+// setTablePrimaryKeys sets the primary keys for the table and adds indexes for them.
 func (s *Schema) setTablePrimaryKeys(fields ...string) {
 	if len(fields) == 0 {
 		return
@@ -110,14 +120,14 @@ func (s *Schema) setTablePrimaryKeys(fields ...string) {
 	for _, v := range fields {
 		f := s.GetField(v)
 		if f == nil {
-			panic(errors.New(fmt.Sprintf("not exists field '%v'", v)))
+			panic(fmt.Errorf("field does not exist: '%v'", v))
 		}
 		f.PrimaryKey = true
 	}
 	s.AddTableIdx(fields...)
 }
 
-// 添加表索引
+// AddTableIdx adds an index to the table for the specified fields.
 func (s *Schema) AddTableIdx(fields ...string) *Schema {
 	if len(fields) == 0 {
 		return s
@@ -126,7 +136,7 @@ func (s *Schema) AddTableIdx(fields ...string) *Schema {
 	for _, v := range fields {
 		f := s.GetField(v)
 		if f == nil {
-			panic(errors.New(fmt.Sprintf("not exists field '%v'", v)))
+			panic(fmt.Errorf("field does not exist: '%v'", v))
 		}
 		clo = append(clo, f.ColumnName)
 	}
@@ -135,12 +145,12 @@ func (s *Schema) AddTableIdx(fields ...string) *Schema {
 	return s
 }
 
-// 设置列时间类型, ct:数据库存储列类型, fields:属性名
+// SetDateTimeColumnType sets the column type to datetime for the specified fields.
 func (s *Schema) SetDateTimeColumnType(fields ...string) *Schema {
 	for _, v := range fields {
 		f := s.GetField(v)
 		if f == nil {
-			panic(errors.New(fmt.Sprintf("not exists field '%v'", v)))
+			panic(fmt.Errorf("field does not exist: '%v'", v))
 		}
 		f.ColumnType = ColumnTypeDatetime
 		f.ColumnLength = 0
@@ -149,42 +159,42 @@ func (s *Schema) SetDateTimeColumnType(fields ...string) *Schema {
 	return s
 }
 
-// 设置列长度, l:数据库存储列长度, fields:属性名
+// SetColumnLen sets the length of the specified fields.
 func (s *Schema) SetColumnLen(l int16, fields ...string) *Schema {
 	for _, v := range fields {
 		f := s.GetField(v)
 		if f == nil {
-			panic(errors.New(fmt.Sprintf("not exists field '%v'", v)))
+			panic(fmt.Errorf("field does not exist: '%v'", v))
 		}
 		f.ColumnLength = l
 	}
 	return s
 }
 
-// 设置列默认值, defaultValue:默认值, fields:属性名
+// SetColumnDefaultValue sets the default value for the specified fields.
 func (s *Schema) SetColumnDefaultValue(defaultValue string, fields ...string) *Schema {
 	for _, v := range fields {
 		f := s.GetField(v)
 		if f == nil {
-			panic(errors.New(fmt.Sprintf("not exists field '%v'", v)))
+			panic(fmt.Errorf("field does not exist: '%v'", v))
 		}
 		f.ColumnDefaultValue = defaultValue
 	}
 	return s
 }
 
-// 设置自增列, fields:属性名, 注: 只有在新建表才有效
+// SetAutoIncrementColumn sets the specified field as an auto-increment column.
 func (s *Schema) SetAutoIncrementColumn(field string) *Schema {
 	f := s.GetField(field)
 	if f == nil {
-		panic(errors.New(fmt.Sprintf("not exists field '%v'", field)))
+		panic(fmt.Errorf("field does not exist: '%v'", field))
 	}
 	f.AutoIncrement = true
 
 	return s
 }
 
-// 设置分表存储, 服务器启动时会记录一个时间点, 当插入语句创建时间和记录点的间隔满足配置时,会重命名表名为分表表名, 重新创建新表插入
+// SetSeparateTable configures table sharding for the schema.
 func (s *Schema) SetSeparateTable(separateType EnumSeparateType) *Schema {
 	s.separateTable = &SeparateTable{
 		tableName:     s.TableName,
@@ -194,12 +204,12 @@ func (s *Schema) SetSeparateTable(separateType EnumSeparateType) *Schema {
 	return s
 }
 
-// 设置列是否可为空(默认不可为空), columnNull:是否可为空, fields:属性名
+// SetColumnNull sets whether the specified fields can be null.
 func (s *Schema) SetColumnNull(columnNull bool, fields ...string) *Schema {
 	for _, v := range fields {
 		f := s.GetField(v)
 		if f == nil {
-			panic(errors.New(fmt.Sprintf("not exists field '%v'", v)))
+			panic(fmt.Errorf("field does not exist: '%v'", v))
 		}
 		f.ColumnNull = columnNull
 	}

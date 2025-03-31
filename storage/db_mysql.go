@@ -8,7 +8,7 @@ import (
 	"strings"
 )
 
-// 列类型
+// EnumColumnType represents the column type in the database.
 type EnumColumnType string
 
 const (
@@ -23,119 +23,115 @@ const (
 	ColumnTypeDatetime EnumColumnType = "datetime"
 )
 
-// 获取列存储类型和长度
+// getColumnType determines the column type, length, and default value based on the Go type.
+// Returns an error if the type is unsupported.
 func getColumnType(fieldType reflect.Type) (columnType EnumColumnType, columnLength int16, columnDefaultValue string, err error) {
 	columnType = ""
 	columnLength = 0
 	columnDefaultValue = ""
 	err = nil
+
 	switch fieldType.Kind() {
 	case reflect.Bool:
 		columnType = ColumnTypeTinyint
 		columnLength = 4
 		columnDefaultValue = "0"
-		break
 	case reflect.Float64:
 		columnType = ColumnTypeDouble
 		columnLength = 0
 		columnDefaultValue = "0"
-		break
 	case reflect.Float32:
 		columnType = ColumnTypeFloat
 		columnLength = 0
 		columnDefaultValue = "0"
-		break
 	case reflect.Int8, reflect.Int16:
 		columnType = ColumnTypeSmallint
 		columnLength = 6
 		columnDefaultValue = "0"
-		break
 	case reflect.Int, reflect.Int32, reflect.Uint32:
 		columnType = ColumnTypeInt
 		columnLength = 11
 		columnDefaultValue = "0"
-		break
 	case reflect.Int64, reflect.Uint64:
 		columnType = ColumnTypeBigint
 		columnLength = 20
 		columnDefaultValue = "0"
-		break
 	case reflect.Map, reflect.Struct, reflect.Array, reflect.String, reflect.Slice, reflect.Ptr:
 		columnType = ColumnTypeVarchar
 		columnLength = 255
 		columnDefaultValue = ""
-		break
 	default:
 		columnType = ColumnTypeUnknow
 		columnLength = 0
 		columnDefaultValue = ""
-		err = errors.New(fmt.Sprintf("unknow reflect type [%v] to column type", fieldType))
+		err = fmt.Errorf("unknown reflect type [%v] to column type", fieldType)
 	}
 	return columnType, columnLength, columnDefaultValue, err
 }
 
-// 查询数据库名sql语句
+// CreateCurrentDatabaseSql generates the SQL query to get the current database name.
 func CreateCurrentDatabaseSql() (string, error) {
 	return "SELECT DATABASE()", nil
 }
 
-// 查询数据库中所有表名sql语句
+// CreateSelectTablesName generates the SQL query to list all table names in a database.
 func CreateSelectTablesName(dbName string) string {
-	return fmt.Sprintf("select table_name from information_schema.tables where table_schema='%v'", dbName)
+	return fmt.Sprintf("SELECT table_name FROM information_schema.tables WHERE table_schema='%v'", dbName)
 }
 
-// 查询表结构sql语句
+// CreateSelectTableStruct generates the SQL query to describe the structure of a table.
 func CreateSelectTableStruct(tableName string) string {
-	return fmt.Sprintf("desc  %v", tableName)
+	return fmt.Sprintf("DESC %v", tableName)
 }
 
-// 是否存在表sql语句
+// CreateHasTableSql generates the SQL query to check if a table exists in a database.
 func CreateHasTableSql(dbName string, tableName string) (string, error) {
-	return fmt.Sprintf("SELECT count(1) FROM INFORMATION_SCHEMA.tables WHERE table_name = '%v' AND table_schema = '%v'", tableName, dbName), nil
+	return fmt.Sprintf("SELECT COUNT(1) FROM information_schema.tables WHERE table_name = '%v' AND table_schema = '%v'", tableName, dbName), nil
 }
 
-// 表是否存在列sql语句
+// CreateHasColumnSql generates the SQL query to check if a column exists in a table.
 func CreateHasColumnSql(dbName string, tableName string, columnName string) (string, error) {
-	return fmt.Sprintf("SELECT count(1) FROM information_schema.columns WHERE table_schema = '%v' AND table_name = '%v' AND column_name = '%v'", dbName, tableName, columnName), nil
+	return fmt.Sprintf("SELECT COUNT(1) FROM information_schema.columns WHERE table_schema = '%v' AND table_name = '%v' AND column_name = '%v'", dbName, tableName, columnName), nil
 }
 
-// 修改表名
+// CreateAlterTableNameSql generates the SQL query to rename a table.
 func CreateAlterTableNameSql(oldTableName string, newTableName string) string {
 	return fmt.Sprintf("ALTER TABLE %s RENAME TO %s", oldTableName, newTableName)
 }
 
-// 表中列的最大值
+// CreateColumnMaxValueSql generates the SQL query to get the maximum value of a column in a table.
 func CreateColumnMaxValueSql(tableName string, columnName string) (string, error) {
-	return fmt.Sprintf("SELECT IFNULL(MAX(%v),0) FROM %v", columnName, tableName), nil
+	return fmt.Sprintf("SELECT IFNULL(MAX(%v), 0) FROM %v", columnName, tableName), nil
 }
 
-// 创建表sql语句, schema:结构体概要信息
+// CreateNewTableSql generates the SQL query to create a new table based on the schema.
 func CreateNewTableSql(schema *Schema) (string, error) {
 	return CreateNewTableSqlWithTableName(schema, schema.TableName)
 }
 
-// 创建表sql语句, schema:结构体概要信息, tableName表名
+// CreateNewTableSqlWithTableName generates the SQL query to create a new table with a specified name.
 func CreateNewTableSqlWithTableName(schema *Schema, tableName string) (string, error) {
 	var buf bytes.Buffer
 	primaryKeys := make([]string, 0)
+
 	buf.WriteString(fmt.Sprintf("CREATE TABLE `%v` (", tableName))
 	for _, v := range schema.Fields {
-		// 列SQL
+		// Add column SQL
 		buf.WriteString(fmt.Sprintf("%v,", getColumnSql(schema, v)))
-		// 主键
+		// Collect primary keys
 		if v.PrimaryKey {
 			primaryKeys = append(primaryKeys, fmt.Sprintf("`%v`", v.ColumnName))
 		}
 	}
 
-	// 主键
+	// Ensure at least one primary key exists
 	if len(primaryKeys) == 0 {
-		return "", errors.New("table must have a need primary key")
+		return "", errors.New("table must have at least one primary key")
 	}
 	buf.WriteString(fmt.Sprintf(" PRIMARY KEY (%v)", strings.Join(primaryKeys, ",")))
 
-	// 索引
-	if schema.IndexKeys != nil && len(schema.IndexKeys) > 0 {
+	// Add indexes if any
+	if len(schema.IndexKeys) > 0 {
 		for _, v := range schema.IndexKeys {
 			if len(v) > 0 {
 				arr := make([]string, 0)
@@ -148,28 +144,27 @@ func CreateNewTableSqlWithTableName(schema *Schema, tableName string) (string, e
 	}
 
 	buf.WriteString(") ENGINE=MyISAM DEFAULT CHARSET=utf8;")
-
 	return buf.String(), nil
 }
 
-// 获取列构造SQL
+// getColumnSql generates the SQL definition for a column based on its schema and field properties.
 func getColumnSql(schema *Schema, field *Field) string {
 	var buf bytes.Buffer
 
 	buf.WriteString(fmt.Sprintf(" `%v` %v", field.ColumnName, field.ColumnType))
-	// 列长度
+	// Add column length if specified
 	if field.ColumnLength > 0 {
 		buf.WriteString(fmt.Sprintf("(%v)", field.ColumnLength))
 	}
-	// 列允许空
+	// Specify if the column allows NULL values
 	if !field.ColumnNull {
 		buf.WriteString(" NOT NULL")
 	}
-	// 列自增
+	// Add auto-increment property if applicable
 	if field.AutoIncrement {
 		buf.WriteString(" AUTO_INCREMENT")
 	} else {
-		// 列默认值
+		// Add default value if not a datetime column
 		if field.ColumnType != ColumnTypeDatetime {
 			buf.WriteString(fmt.Sprintf(" DEFAULT '%v'", field.ColumnDefaultValue))
 		}
@@ -178,25 +173,25 @@ func getColumnSql(schema *Schema, field *Field) string {
 	return buf.String()
 }
 
-// 增加表列sql语句, schema:结构体概要信息, field:列信息
+// CreateNewColumnSql generates the SQL query to add a new column to a table.
 func CreateNewColumnSql(schema *Schema, field *Field) string {
 	return fmt.Sprintf("ALTER TABLE `%v` ADD COLUMN %v;", schema.TableName, getColumnSql(schema, field))
 }
 
-// 修改表列sql语句, schema:结构体概要信息, field:列信息
+// CreateModifyColumnSql generates the SQL query to modify an existing column in a table.
 func CreateModifyColumnSql(schema *Schema, field *Field) string {
 	return fmt.Sprintf("ALTER TABLE `%v` MODIFY COLUMN %v;", schema.TableName, getColumnSql(schema, field))
 }
 
-// 创建分表sql语句(旧表改名, 创建新表)
+// CreateSeparateTableSql generates the SQL queries to rename an existing table and create a new table based on the schema.
 func CreateSeparateTableSql(schema *Schema, separateTableName string) ([]string, error) {
 	arrSql := make([]string, 0, 2)
 
-	// 原表名称改成分表的名称
+	// Rename the original table to the separate table name
 	strSqlAlter := CreateAlterTableNameSql(schema.TableName, separateTableName)
 	arrSql = append(arrSql, strSqlAlter)
 
-	// 重新创建当前使用的表
+	// Create a new table with the original table name
 	strSqlCreate, err := CreateNewTableSql(schema)
 	if err != nil {
 		return nil, err
@@ -206,11 +201,11 @@ func CreateSeparateTableSql(schema *Schema, separateTableName string) ([]string,
 	return arrSql, nil
 }
 
-// 插入表sql语句, p:结构体引用
-func CreateInsertSql(schema *Schema, p interface{}) (arrSql []string, err error) {
+// CreateInsertSql generates the SQL query to insert a new row into a table based on the schema and the provided struct.
+func CreateInsertSql(schema *Schema, p any) (arrSql []string, err error) {
 	arrSql = make([]string, 0, 1)
 
-	// 获取表名(如果有分表, 需要处理分表表名)
+	// Get the table name (handle separate tables if applicable)
 	isSeparate, separateTableName := schema.GetSeparateTableName()
 	if isSeparate {
 		arrSeparateSql, err := CreateSeparateTableSql(schema, separateTableName)
@@ -229,7 +224,7 @@ func CreateInsertSql(schema *Schema, p interface{}) (arrSql []string, err error)
 
 	k := make([]string, 0)
 	v := make([]string, 0)
-	var cv interface{}
+	var cv any
 	for _, field := range schema.Fields {
 		k = append(k, fmt.Sprintf("`%v`", field.ColumnName))
 		cv, err = ParseColumnValue(field, rv.FieldByName(field.Name).Interface())
@@ -243,7 +238,7 @@ func CreateInsertSql(schema *Schema, p interface{}) (arrSql []string, err error)
 	buf.WriteString(schema.TableName)
 	buf.WriteString("`(")
 	buf.WriteString(strings.Join(k, ","))
-	buf.WriteString(")  VALUES(")
+	buf.WriteString(") VALUES(")
 	buf.WriteString(strings.Join(v, ","))
 	buf.WriteString(")")
 
@@ -252,8 +247,9 @@ func CreateInsertSql(schema *Schema, p interface{}) (arrSql []string, err error)
 	return arrSql, err
 }
 
-// 更新表sql语句(条件默认列id), p:结构体引用
-func CreateUpdateSql(schema *Schema, p interface{}, fields ...string) (strSql string, err error) {
+// CreateUpdateSql generates the SQL query to update a row in a table based on the schema and the provided struct.
+// The update is performed based on the primary key columns.
+func CreateUpdateSql(schema *Schema, p any, fields ...string) (strSql string, err error) {
 	rv := reflect.ValueOf(p)
 	if rv.Kind() == reflect.Ptr {
 		rv = rv.Elem()
@@ -261,12 +257,12 @@ func CreateUpdateSql(schema *Schema, p interface{}, fields ...string) (strSql st
 
 	var buf bytes.Buffer
 
-	// 更新的表
+	// Specify the table to update
 	buf.WriteString("UPDATE `")
 	buf.WriteString(schema.TableName)
 	buf.WriteString("`")
 
-	// 更新的字段
+	// Specify the columns to update
 	buf.WriteString(" SET ")
 	flag := true
 
@@ -277,15 +273,15 @@ func CreateUpdateSql(schema *Schema, p interface{}, fields ...string) (strSql st
 		for _, v := range fields {
 			field := schema.GetField(v)
 			if field == nil {
-				return "", errors.New(fmt.Sprintf("field not exists: %v", v))
+				return "", fmt.Errorf("field not exists: %v", v)
 			}
 			updateFields = append(updateFields, field)
 		}
 	}
 
-	var cv interface{}
+	var cv any
 	for _, field := range updateFields {
-		if field.PrimaryKey == false {
+		if !field.PrimaryKey {
 			cv, err = ParseColumnValue(field, rv.FieldByName(field.Name).Interface())
 			if err != nil {
 				return "", err
@@ -298,7 +294,7 @@ func CreateUpdateSql(schema *Schema, p interface{}, fields ...string) (strSql st
 		}
 	}
 
-	// 更新的条件
+	// Specify the conditions for the update (based on primary key columns)
 	buf.WriteString(" WHERE ")
 	flag = true
 	for _, field := range schema.Fields {
@@ -314,8 +310,9 @@ func CreateUpdateSql(schema *Schema, p interface{}, fields ...string) (strSql st
 	return buf.String(), err
 }
 
-// 删除表数据sql语句, schema:结构体信息, p:结构体引用
-func CreateDeleteSql(schema *Schema, p interface{}) (strSql string, err error) {
+// CreateDeleteSql generates the SQL query to delete a row from a table based on the schema and the provided struct.
+// The deletion is performed based on the primary key columns.
+func CreateDeleteSql(schema *Schema, p any) (strSql string, err error) {
 	rv := reflect.ValueOf(p)
 	if rv.Kind() == reflect.Ptr {
 		rv = rv.Elem()
@@ -323,12 +320,12 @@ func CreateDeleteSql(schema *Schema, p interface{}) (strSql string, err error) {
 
 	var buf bytes.Buffer
 
-	// 删除的表
+	// Specify the table to delete from
 	buf.WriteString("DELETE FROM `")
 	buf.WriteString(schema.TableName)
 	buf.WriteString("`")
 
-	// 删除的条件
+	// Specify the conditions for the deletion (based on primary key columns)
 	buf.WriteString(" WHERE ")
 	flag := true
 	for _, field := range schema.Fields {
@@ -344,8 +341,8 @@ func CreateDeleteSql(schema *Schema, p interface{}) (strSql string, err error) {
 	return buf.String(), err
 }
 
-// 查询表数据sql语句, schema:结构体信息, args:k-v(列名,值)条件
-func CreateSelectSql(schema *Schema, params map[string]interface{}) (strSql string, err error) {
+// CreateSelectSql generates the SQL query to select rows from a table based on the schema and the provided conditions.
+func CreateSelectSql(schema *Schema, params map[string]any) (strSql string, err error) {
 	var buf bytes.Buffer
 
 	buf.WriteString("SELECT ")
@@ -357,7 +354,8 @@ func CreateSelectSql(schema *Schema, params map[string]interface{}) (strSql stri
 	}
 	buf.WriteString(fmt.Sprintf(" FROM `%v`", schema.TableName))
 
-	if params != nil && len(params) > 0 {
+	// Check if params has conditions
+	if len(params) > 0 {
 		buf.WriteString(" WHERE ")
 		flag := true
 		for k, v := range params {
@@ -371,9 +369,9 @@ func CreateSelectSql(schema *Schema, params map[string]interface{}) (strSql stri
 	return buf.String(), err
 }
 
-// 获取新增字段sql语句
+// CreateTableAddColumnSql generates the SQL queries to add new columns to a table based on the schema.
 func CreateTableAddColumnSql(schema *Schema, fields []*Field) []string {
-	changleSqls := make([]string, 0)
+	changeSqls := make([]string, 0)
 
 	exists := false
 	for i, newV := range schema.Fields {
@@ -389,13 +387,13 @@ func CreateTableAddColumnSql(schema *Schema, fields []*Field) []string {
 			if i > 0 {
 				strSql = fmt.Sprintf("%v AFTER `%v`;", strings.TrimRight(strSql, ";"), schema.Fields[i-1].ColumnName)
 			}
-			changleSqls = append(changleSqls, strSql)
+			changeSqls = append(changeSqls, strSql)
 		}
 	}
-	return changleSqls
+	return changeSqls
 }
 
-// 获取修改字段sql语句
+// CreateTableModifyColumnSql generates the SQL queries to modify existing columns in a table based on the schema.
 func CreateTableModifyColumnSql(schema *Schema, fields []*Field) []string {
 	changeSqls := make([]string, 0)
 
@@ -417,7 +415,7 @@ func CreateTableModifyColumnSql(schema *Schema, fields []*Field) []string {
 	return changeSqls
 }
 
-// 替换db敏感字符
+// escapeBackslash replaces sensitive characters in a byte slice with their escaped equivalents.
 func escapeBackslash(v []byte) []byte {
 	pos := 0
 	buf := make([]byte, len(v)*2)

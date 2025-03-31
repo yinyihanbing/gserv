@@ -5,68 +5,78 @@ import (
 	"time"
 )
 
-// 分表类型
+// table separation type
 type EnumSeparateType int
 
 const (
-	SeparateTypeDay   EnumSeparateType = 1 // 按天
-	SeparateTypeMonth EnumSeparateType = 2 // 按月
-	SeparateTypeYear  EnumSeparateType = 3 // 按年
+	SeparateTypeDay   EnumSeparateType = 1 // separate by day
+	SeparateTypeMonth EnumSeparateType = 2 // separate by month
+	SeparateTypeYear  EnumSeparateType = 3 // separate by year
 )
 
-// 分表存储配置
+// configuration for table separation
 type SeparateTable struct {
-	tableName     string           // 表名
-	SeparateType  EnumSeparateType // 分表类型
-	LastCheckTime time.Time        // 上次检测时间
+	tableName     string           // base table name
+	SeparateType  EnumSeparateType // separation type
+	LastCheckTime time.Time        // last check time
 }
 
-// 当前是否需分表,isSeparate=是否需要分表, separateTableName=分表名称
-func (this *SeparateTable) IsNowSeparate() (isSeparate bool, separateTableName string) {
-	switch this.SeparateType {
+// check if table needs to be separated now
+// returns isSeparate (whether separation is needed) and separateTableName (new table name if separated)
+func (st *SeparateTable) IsNowSeparate() (isSeparate bool, separateTableName string) {
+	switch st.SeparateType {
 	case SeparateTypeDay:
-		return this.getDayTableName()
+		return st.getDayTableName()
 	case SeparateTypeMonth:
-		return this.getMonthTableName()
+		return st.getMonthTableName()
 	case SeparateTypeYear:
-		return this.getYearTableName()
+		return st.getYearTableName()
 	default:
-		return false, ""
+		return false, "" // invalid separation type
 	}
 }
 
-// 按日分表
-func (this *SeparateTable) getDayTableName() (isSeparate bool, separateTableName string) {
+// get table name for daily separation
+// returns isSeparate (whether separation is needed) and separateTableName (new table name if separated)
+func (st *SeparateTable) getDayTableName() (isSeparate bool, separateTableName string) {
 	nt := time.Now()
-	if this.LastCheckTime.Year() == nt.Year() && this.LastCheckTime.Month() == nt.Month() && this.LastCheckTime.Day() == nt.Day() {
-		return false, ""
+	// check if the last check was on the same day
+	if st.LastCheckTime.Year() == nt.Year() && st.LastCheckTime.Month() == nt.Month() && st.LastCheckTime.Day() == nt.Day() {
+		return false, "" // no separation needed
 	}
-	this.LastCheckTime = nt
+	st.LastCheckTime = nt
 
+	// generate table name for the previous day
 	nt = nt.AddDate(0, 0, -1)
-	return true, fmt.Sprintf("%v_%d%02d%02d", this.tableName, nt.Year(), nt.Month(), nt.Day())
+	return true, fmt.Sprintf("%v_%d%02d%02d", st.tableName, nt.Year(), nt.Month(), nt.Day())
 }
 
-// 按月分表
-func (this *SeparateTable) getMonthTableName() (isSeparate bool, separateTableName string) {
+// get table name for monthly separation
+// returns isSeparate (whether separation is needed) and separateTableName (new table name if separated)
+func (st *SeparateTable) getMonthTableName() (isSeparate bool, separateTableName string) {
 	nt := time.Now()
-	if this.LastCheckTime.Year() == nt.Year() && this.LastCheckTime.Month() == nt.Month() {
-		return false, ""
+	// check if the last check was in the same month
+	if st.LastCheckTime.Year() == nt.Year() && st.LastCheckTime.Month() == nt.Month() {
+		return false, "" // no separation needed
 	}
-	this.LastCheckTime = nt
+	st.LastCheckTime = nt
 
+	// generate table name for the previous month
 	nt = nt.AddDate(0, -1, 0)
-	return true, fmt.Sprintf("%v_%d%02d", this.tableName, nt.Year(), nt.Month())
+	return true, fmt.Sprintf("%v_%d%02d", st.tableName, nt.Year(), nt.Month())
 }
 
-// 按年分表
-func (this *SeparateTable) getYearTableName() (isSeparate bool, separateTableName string) {
+// get table name for yearly separation
+// returns isSeparate (whether separation is needed) and separateTableName (new table name if separated)
+func (st *SeparateTable) getYearTableName() (isSeparate bool, separateTableName string) {
 	nt := time.Now()
-	if this.LastCheckTime.Year() == nt.Year() {
-		return false, ""
+	// check if the last check was in the same year
+	if st.LastCheckTime.Year() == nt.Year() {
+		return false, "" // no separation needed
 	}
-	this.LastCheckTime = nt
+	st.LastCheckTime = nt
 
+	// generate table name for the previous year
 	nt = nt.AddDate(-1, 0, 0)
-	return true, fmt.Sprintf("%v_%d", this.tableName, nt.Year())
+	return true, fmt.Sprintf("%v_%d", st.tableName, nt.Year())
 }

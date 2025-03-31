@@ -1,12 +1,14 @@
 package network
 
 import (
-	"github.com/gorilla/websocket"
-	"github.com/yinyihanbing/gutils/logs"
 	"sync"
 	"time"
+
+	"github.com/gorilla/websocket"
+	"github.com/yinyihanbing/gutils/logs"
 )
 
+// WSClient represents a WebSocket client with configurable options.
 type WSClient struct {
 	sync.Mutex
 	Addr             string
@@ -23,44 +25,46 @@ type WSClient struct {
 	closeFlag        bool
 }
 
+// Start initializes the client and starts the connection process.
 func (client *WSClient) Start() {
 	client.init()
 
-	for i := 0; i < client.ConnNum; i++ {
+	for range make([]struct{}, client.ConnNum) {
 		client.wg.Add(1)
 		go client.connect()
 	}
 }
 
+// init validates and initializes the client configuration.
 func (client *WSClient) init() {
 	client.Lock()
 	defer client.Unlock()
 
 	if client.ConnNum <= 0 {
 		client.ConnNum = 1
-		logs.Info("invalid ConnNum, reset to %v", client.ConnNum)
+		logs.Info("invalid connnum, reset to %v", client.ConnNum)
 	}
 	if client.ConnectInterval <= 0 {
 		client.ConnectInterval = 3 * time.Second
-		logs.Info("invalid ConnectInterval, reset to %v", client.ConnectInterval)
+		logs.Info("invalid connectinterval, reset to %v", client.ConnectInterval)
 	}
 	if client.PendingWriteNum <= 0 {
 		client.PendingWriteNum = 100
-		logs.Info("invalid PendingWriteNum, reset to %v", client.PendingWriteNum)
+		logs.Info("invalid pendingwritenum, reset to %v", client.PendingWriteNum)
 	}
 	if client.MaxMsgLen <= 0 {
 		client.MaxMsgLen = 4096
-		logs.Info("invalid MaxMsgLen, reset to %v", client.MaxMsgLen)
+		logs.Info("invalid maxmsglen, reset to %v", client.MaxMsgLen)
 	}
 	if client.HandshakeTimeout <= 0 {
 		client.HandshakeTimeout = 10 * time.Second
-		logs.Info("invalid HandshakeTimeout, reset to %v", client.HandshakeTimeout)
+		logs.Info("invalid handshaketimeout, reset to %v", client.HandshakeTimeout)
 	}
 	if client.NewAgent == nil {
-		logs.Fatal("NewAgent must not be nil")
+		logs.Fatal("newagent must not be nil")
 	}
 	if client.conns != nil {
-		logs.Fatal("client is running")
+		logs.Fatal("client is already running")
 	}
 
 	client.conns = make(WebsocketConnSet)
@@ -70,18 +74,20 @@ func (client *WSClient) init() {
 	}
 }
 
+// dial establishes a WebSocket connection to the server.
 func (client *WSClient) dial() *websocket.Conn {
 	for {
 		conn, _, err := client.dialer.Dial(client.Addr, nil)
 		if err == nil || client.closeFlag {
 			return conn
 		}
-		logs.Info("connect to %v error: %v", client.Addr, err)
+		logs.Info("failed to connect to %v: %v", client.Addr, err)
 		time.Sleep(client.ConnectInterval)
 		continue
 	}
 }
 
+// connect handles the connection lifecycle and reconnection logic.
 func (client *WSClient) connect() {
 	defer client.wg.Done()
 
@@ -118,6 +124,7 @@ reconnect:
 	}
 }
 
+// Close gracefully shuts down the client and closes all connections.
 func (client *WSClient) Close() {
 	client.Lock()
 	client.closeFlag = true

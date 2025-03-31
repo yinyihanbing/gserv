@@ -1,12 +1,14 @@
 package network
 
 import (
-	"github.com/yinyihanbing/gutils/logs"
 	"net"
 	"sync"
 	"time"
+
+	"github.com/yinyihanbing/gutils/logs"
 )
 
+// TCPClient represents a TCP client configuration and runtime state.
 type TCPClient struct {
 	sync.Mutex
 	Addr            string
@@ -27,6 +29,7 @@ type TCPClient struct {
 	msgParser    *MsgParser
 }
 
+// Start initializes the client and starts the connection goroutines.
 func (client *TCPClient) Start() {
 	client.init()
 
@@ -36,39 +39,51 @@ func (client *TCPClient) Start() {
 	}
 }
 
+// init initializes the client configuration and message parser.
 func (client *TCPClient) init() {
 	client.Lock()
 	defer client.Unlock()
 
-	if client.ConnNum <= 0 {
-		client.ConnNum = 1
-		logs.Info("invalid ConnNum, reset to %v", client.ConnNum)
-	}
-	if client.ConnectInterval <= 0 {
-		client.ConnectInterval = 3 * time.Second
-		logs.Info("invalid ConnectInterval, reset to %v", client.ConnectInterval)
-	}
-	if client.PendingWriteNum <= 0 {
-		client.PendingWriteNum = 100
-		logs.Info("invalid PendingWriteNum, reset to %v", client.PendingWriteNum)
-	}
-	if client.NewAgent == nil {
-		logs.Fatal("NewAgent must not be nil")
-	}
+	client.validateConfig()
+
 	if client.conns != nil {
-		logs.Fatal("client is running")
+		logs.Fatal("tcpclient is already running. duplicate start() calls are not allowed.")
 	}
 
 	client.conns = make(ConnSet)
 	client.closeFlag = false
 
-	// msg parser
+	client.initMsgParser()
+}
+
+// validateConfig validates and adjusts the client configuration.
+func (client *TCPClient) validateConfig() {
+	if client.ConnNum <= 0 {
+		client.ConnNum = 1
+		logs.Info("invalid connnum. resetting to default value: %v", client.ConnNum)
+	}
+	if client.ConnectInterval <= 0 {
+		client.ConnectInterval = 3 * time.Second
+		logs.Info("invalid connectinterval. resetting to default value: %v", client.ConnectInterval)
+	}
+	if client.PendingWriteNum <= 0 {
+		client.PendingWriteNum = 100
+		logs.Info("invalid pendingwritenum. resetting to default value: %v", client.PendingWriteNum)
+	}
+	if client.NewAgent == nil {
+		logs.Fatal("newagent callback must not be nil. please provide a valid function.")
+	}
+}
+
+// initMsgParser initializes the message parser with the configured parameters.
+func (client *TCPClient) initMsgParser() {
 	msgParser := NewMsgParser()
 	msgParser.SetMsgLen(client.LenMsgLen, client.MinMsgLen, client.MaxMsgLen)
 	msgParser.SetByteOrder(client.LittleEndian)
 	client.msgParser = msgParser
 }
 
+// dial attempts to establish a TCP connection to the configured address.
 func (client *TCPClient) dial() net.Conn {
 	for {
 		conn, err := net.Dial("tcp", client.Addr)
@@ -76,26 +91,39 @@ func (client *TCPClient) dial() net.Conn {
 			return conn
 		}
 
-		logs.Info("connect to %v error: %v", client.Addr, err)
+		logs.Info("failed to connect to %v. error: %v. retrying in %v...", client.Addr, err, client.ConnectInterval)
 		time.Sleep(client.ConnectInterval)
-		continue
 	}
 }
 
+// connect handles the connection lifecycle, including reconnection logic.
 func (client *TCPClient) connect() {
 	defer client.wg.Done()
 
-reconnect:
-	conn := client.dial()
-	if conn == nil {
-		return
-	}
+	for {
+		conn := client.dial()
+		if conn == nil {
+			return
+		}
 
+		if !client.handleConnection(conn) {
+			return
+		}
+
+		if !client.AutoReconnect {
+			break
+		}
+		time.Sleep(client.ConnectInterval)
+	}
+}
+
+// handleConnection manages a single connection, including agent lifecycle and cleanup.
+func (client *TCPClient) handleConnection(conn net.Conn) bool {
 	client.Lock()
 	if client.closeFlag {
 		client.Unlock()
 		conn.Close()
-		return
+		return false
 	}
 	client.conns[conn] = struct{}{}
 	client.Unlock()
@@ -104,19 +132,17 @@ reconnect:
 	agent := client.NewAgent(tcpConn)
 	agent.Run()
 
-	// cleanup
+	// Cleanup after connection is closed
 	tcpConn.Close()
 	client.Lock()
 	delete(client.conns, conn)
 	client.Unlock()
 	agent.OnClose()
 
-	if client.AutoReconnect {
-		time.Sleep(client.ConnectInterval)
-		goto reconnect
-	}
+	return true
 }
 
+// Close gracefully shuts down the client, closing all active connections.
 func (client *TCPClient) Close() {
 	client.Lock()
 	client.closeFlag = true

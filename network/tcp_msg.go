@@ -7,16 +7,15 @@ import (
 	"math"
 )
 
-// --------------
-// | len | data |
-// --------------
+// MsgParser handles TCP message length and data parsing.
 type MsgParser struct {
-	lenMsgLen    int
-	minMsgLen    uint32
-	maxMsgLen    uint32
-	littleEndian bool
+	lenMsgLen    int    // Length of the message length field (1, 2, or 4 bytes).
+	minMsgLen    uint32 // Minimum allowed message length.
+	maxMsgLen    uint32 // Maximum allowed message length.
+	littleEndian bool   // Byte order: true for little-endian, false for big-endian.
 }
 
+// NewMsgParser creates a new MsgParser with default settings.
 func NewMsgParser() *MsgParser {
 	p := new(MsgParser)
 	p.lenMsgLen = 2
@@ -27,7 +26,10 @@ func NewMsgParser() *MsgParser {
 	return p
 }
 
-// It's dangerous to call the method on reading or writing
+// SetMsgLen configures the message length field and its constraints.
+// lenMsgLen: Length of the message length field (1, 2, or 4 bytes).
+// minMsgLen: Minimum allowed message length.
+// maxMsgLen: Maximum allowed message length.
 func (p *MsgParser) SetMsgLen(lenMsgLen int, minMsgLen uint32, maxMsgLen uint32) {
 	if lenMsgLen == 1 || lenMsgLen == 2 || lenMsgLen == 4 {
 		p.lenMsgLen = lenMsgLen
@@ -56,12 +58,14 @@ func (p *MsgParser) SetMsgLen(lenMsgLen int, minMsgLen uint32, maxMsgLen uint32)
 	}
 }
 
-// It's dangerous to call the method on reading or writing
+// SetByteOrder sets the byte order for encoding/decoding the message length.
+// littleEndian: true for little-endian, false for big-endian.
 func (p *MsgParser) SetByteOrder(littleEndian bool) {
 	p.littleEndian = littleEndian
 }
 
-// goroutine safe
+// Read reads a message from the TCP connection.
+// Returns the message data or an error if the message is invalid or cannot be read.
 func (p *MsgParser) Read(conn *TCPConn) ([]byte, error) {
 	var b [4]byte
 	bufMsgLen := b[:p.lenMsgLen]
@@ -106,12 +110,14 @@ func (p *MsgParser) Read(conn *TCPConn) ([]byte, error) {
 	return msgData, nil
 }
 
-// goroutine safe
+// Write writes a message to the TCP connection.
+// args: Message parts to be concatenated and sent.
+// Returns an error if the message length is invalid or cannot be written.
 func (p *MsgParser) Write(conn *TCPConn, args ...[]byte) error {
 	// get len
 	var msgLen uint32
-	for i := 0; i < len(args); i++ {
-		msgLen += uint32(len(args[i]))
+	for _, arg := range args {
+		msgLen += uint32(len(arg))
 	}
 
 	// check len
@@ -143,9 +149,9 @@ func (p *MsgParser) Write(conn *TCPConn, args ...[]byte) error {
 
 	// write data
 	l := p.lenMsgLen
-	for i := 0; i < len(args); i++ {
-		copy(msg[l:], args[i])
-		l += len(args[i])
+	for _, arg := range args {
+		copy(msg[l:], arg)
+		l += len(arg)
 	}
 
 	conn.Write(msg)

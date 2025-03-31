@@ -12,41 +12,42 @@ type Storage struct {
 	dbClis    map[int]*DbCli
 }
 
+// initialize storage with empty redis and db clients
 func init() {
 	storage = &Storage{}
 	storage.redisClis = map[int]*RedisCli{}
 	storage.dbClis = map[int]*DbCli{}
 }
 
-// 获取编号为0的Redis连接
+// get redis client with index 0
 func GetRedisCli() *RedisCli {
 	return storage.redisClis[0]
 }
 
-// 获取指定编号的Redis连接
+// get redis client by specific index
 func GetRedisCliExt(idx int) *RedisCli {
 	return storage.redisClis[idx]
 }
 
-// 获取编号为0的Db连接
+// get db client with index 0
 func GetDbCli() *DbCli {
 	return storage.dbClis[0]
 }
 
-// 获取指定编号的Db连接
+// get db client by specific index
 func GetDbCliExt(idx int) *DbCli {
 	return storage.dbClis[idx]
 }
 
-// 释放资源
+// release all resources
 func Destroy() {
 	storage.Destroy()
 }
 
-// 添加Redis连接
+// add a redis client with a specific index
 func AddRedisCli(redisCliIdx int, redisCfg *RedisConfig) error {
 	if _, ok := storage.redisClis[redisCliIdx]; ok {
-		return errors.New(fmt.Sprintf("RedisCli idx %v has already existed", redisCliIdx))
+		return fmt.Errorf("redis client with index %v already exists", redisCliIdx)
 	}
 
 	redisCli, err := newRedisClipool(redisCfg)
@@ -58,10 +59,10 @@ func AddRedisCli(redisCliIdx int, redisCfg *RedisConfig) error {
 	return nil
 }
 
-// 添加Db连接
+// add a db client with a specific index
 func AddDbCli(dbCliIdx int, dbCfg *DbConfig) error {
 	if _, ok := storage.dbClis[dbCliIdx]; ok {
-		return errors.New(fmt.Sprintf("DbCli idx %v has already existed", dbCliIdx))
+		return fmt.Errorf("db client with index %v already exists", dbCliIdx)
 	}
 
 	dbCli, err := newDbCli(dbCfg)
@@ -73,19 +74,19 @@ func AddDbCli(dbCliIdx int, dbCfg *DbConfig) error {
 	return nil
 }
 
-// 启动数据库持久化队列
+// start persistence queues for all db clients
 func StartDbQueue() {
 	for _, v := range storage.dbClis {
 		v.StartQueue()
 	}
 }
 
-// 启动指定数据库持久化队列
+// start persistence queue for a specific db client
 func StartDbQueueExt(dbCliIdx int) {
 	storage.dbClis[dbCliIdx].StartQueue()
 }
 
-// 当前DB队列带执行任务数量
+// get the total number of tasks in all db queues
 func GetDbQueueTaskCount() (count int64) {
 	for _, v := range storage.dbClis {
 		if v.dbQueue != nil {
@@ -95,7 +96,7 @@ func GetDbQueueTaskCount() (count int64) {
 	return count
 }
 
-// 释放资源
+// release all resources for storage
 func (s *Storage) Destroy() {
 	for _, dbCli := range s.dbClis {
 		dbCli.Destroy()
@@ -105,11 +106,11 @@ func (s *Storage) Destroy() {
 	}
 }
 
-// 从Redis和Db中添加数据
-func Add(key string, field interface{}, p interface{}) (err error) {
+// add data to both redis and db
+func Add(key string, field any, p any) (err error) {
 	redisCli := GetRedisCli()
 	if redisCli == nil {
-		err = errors.New(fmt.Sprintf("Add: redisCli idx %v not exists", 0))
+		err = errors.New("add: redis client with index 0 does not exist")
 		return
 	}
 
@@ -120,7 +121,7 @@ func Add(key string, field interface{}, p interface{}) (err error) {
 
 	dbCli := GetDbCli()
 	if dbCli == nil {
-		err = errors.New(fmt.Sprintf("Add: dbCli idx %v not exists", 0))
+		err = errors.New("add: db client with index 0 does not exist")
 		return
 	}
 	dbCli.AsyncInsert(p)
@@ -128,11 +129,11 @@ func Add(key string, field interface{}, p interface{}) (err error) {
 	return nil
 }
 
-// 从Redis和Db中删除数据
-func Delete(key string, field interface{}, p interface{}) (err error) {
+// delete data from both redis and db
+func Delete(key string, field any, p any) (err error) {
 	redisCli := GetRedisCli()
 	if redisCli == nil {
-		err = errors.New(fmt.Sprintf("Delete: redisCli idx %v not exists", 0))
+		err = errors.New("delete: redis client with index 0 does not exist")
 		return
 	}
 
@@ -143,7 +144,7 @@ func Delete(key string, field interface{}, p interface{}) (err error) {
 
 	dbCli := GetDbCli()
 	if dbCli == nil {
-		err = errors.New(fmt.Sprintf("Delete: dbCli idx %v not exists", 0))
+		err = errors.New("delete: db client with index 0 does not exist")
 		return
 	}
 	dbCli.AsyncDelete(p)
@@ -151,11 +152,11 @@ func Delete(key string, field interface{}, p interface{}) (err error) {
 	return nil
 }
 
-// 从Redis和Db中更新数据
-func Update(key string, field interface{}, p interface{}, fields ...string) (err error) {
+// update data in both redis and db
+func Update(key string, field any, p any, fields ...string) (err error) {
 	redisCli := GetRedisCli()
 	if redisCli == nil {
-		err = errors.New(fmt.Sprintf("Update: redisCli idx %v not exists", 0))
+		err = errors.New("update: redis client with index 0 does not exist")
 		return
 	}
 
@@ -166,7 +167,7 @@ func Update(key string, field interface{}, p interface{}, fields ...string) (err
 
 	dbCli := GetDbCli()
 	if dbCli == nil {
-		err = errors.New(fmt.Sprintf("Update: dbCli idx %v not exists", 0))
+		err = errors.New("update: db client with index 0 does not exist")
 		return
 	}
 	dbCli.AsyncUpdate(p, fields...)
@@ -174,11 +175,11 @@ func Update(key string, field interface{}, p interface{}, fields ...string) (err
 	return nil
 }
 
-// 从Redis和Db中更新数据
-func UpdateMultiple(key string, args map[interface{}]interface{}, fields ...string) (err error) {
+// update multiple fields in both redis and db
+func UpdateMultiple(key string, args map[any]any, fields ...string) (err error) {
 	redisCli := GetRedisCli()
 	if redisCli == nil {
-		err = errors.New(fmt.Sprintf("UpdateMultiple: redisCli idx %v not exists", 0))
+		err = errors.New("update multiple: redis client with index 0 does not exist")
 		return
 	}
 
@@ -189,7 +190,7 @@ func UpdateMultiple(key string, args map[interface{}]interface{}, fields ...stri
 
 	dbCli := GetDbCli()
 	if dbCli == nil {
-		err = errors.New(fmt.Sprintf("UpdateMultiple: dbCli idx %v not exists", 0))
+		err = errors.New("update multiple: db client with index 0 does not exist")
 		return
 	}
 	for _, v := range args {
@@ -199,11 +200,11 @@ func UpdateMultiple(key string, args map[interface{}]interface{}, fields ...stri
 	return nil
 }
 
-// 从Redis和Db中添加数据
-func AddMultiple(key string, args map[interface{}]interface{}) (err error) {
+// add multiple entries to both redis and db
+func AddMultiple(key string, args map[any]any) (err error) {
 	redisCli := GetRedisCli()
 	if redisCli == nil {
-		err = errors.New(fmt.Sprintf("AddMultiple: redisCli idx %v not exists", 0))
+		err = errors.New("add multiple: redis client with index 0 does not exist")
 		return
 	}
 
@@ -214,7 +215,7 @@ func AddMultiple(key string, args map[interface{}]interface{}) (err error) {
 
 	dbCli := GetDbCli()
 	if dbCli == nil {
-		err = errors.New(fmt.Sprintf("AddMultiple: dbCli idx %v not exists", 0))
+		err = errors.New("add multiple: db client with index 0 does not exist")
 		return
 	}
 	for _, v := range args {
@@ -224,15 +225,15 @@ func AddMultiple(key string, args map[interface{}]interface{}) (err error) {
 	return nil
 }
 
-// 从Redis和Db中删除数据
-func DeleteMultiple(key string, args map[interface{}]interface{}) (err error) {
+// delete multiple entries from both redis and db
+func DeleteMultiple(key string, args map[any]any) (err error) {
 	redisCli := GetRedisCli()
 	if redisCli == nil {
-		err = errors.New(fmt.Sprintf("DeleteMultiple: redisCli idx %v not exists", 0))
+		err = errors.New("delete multiple: redis client with index 0 does not exist")
 		return
 	}
 
-	delIds := make([]interface{}, 0, len(args))
+	delIds := make([]any, 0, len(args))
 	for k := range args {
 		delIds = append(delIds, k)
 	}
@@ -244,7 +245,7 @@ func DeleteMultiple(key string, args map[interface{}]interface{}) (err error) {
 
 	dbCli := GetDbCli()
 	if dbCli == nil {
-		err = errors.New(fmt.Sprintf("DeleteMultiple: dbCli idx %v not exists", 0))
+		err = errors.New("delete multiple: db client with index 0 does not exist")
 		return
 	}
 	for _, v := range args {
@@ -254,11 +255,11 @@ func DeleteMultiple(key string, args map[interface{}]interface{}) (err error) {
 	return nil
 }
 
-// 从Redis和Db中添加数据
-func ZAdd(key string, score int64, member interface{}, p interface{}) (err error) {
+// add data to redis sorted set and db
+func ZAdd(key string, score int64, member any, p any) (err error) {
 	redisCli := GetRedisCli()
 	if redisCli == nil {
-		err = errors.New(fmt.Sprintf("ZAdd: redisCli idx %v not exists", 0))
+		err = errors.New("zadd: redis client with index 0 does not exist")
 		return
 	}
 
@@ -269,7 +270,7 @@ func ZAdd(key string, score int64, member interface{}, p interface{}) (err error
 
 	dbCli := GetDbCli()
 	if dbCli == nil {
-		err = errors.New(fmt.Sprintf("ZAdd: dbCli idx %v not exists", 0))
+		err = errors.New("zadd: db client with index 0 does not exist")
 		return
 	}
 	dbCli.AsyncInsert(p)
@@ -277,11 +278,11 @@ func ZAdd(key string, score int64, member interface{}, p interface{}) (err error
 	return nil
 }
 
-// 从Redis和Db中更新数据
-func ZUpdate(key string, score int64, member interface{}, p interface{}, fields ...string) (err error) {
+// update data in redis sorted set and db
+func ZUpdate(key string, score int64, member any, p any, fields ...string) (err error) {
 	redisCli := GetRedisCli()
 	if redisCli == nil {
-		err = errors.New(fmt.Sprintf("ZUpdate: redisCli idx %v not exists", 0))
+		err = errors.New("zupdate: redis client with index 0 does not exist")
 		return
 	}
 
@@ -292,7 +293,7 @@ func ZUpdate(key string, score int64, member interface{}, p interface{}, fields 
 
 	dbCli := GetDbCli()
 	if dbCli == nil {
-		err = errors.New(fmt.Sprintf("Update: dbCli idx %v not exists", 0))
+		err = errors.New("zupdate: db client with index 0 does not exist")
 		return
 	}
 	dbCli.AsyncUpdate(p, fields...)

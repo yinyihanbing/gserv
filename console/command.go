@@ -18,15 +18,15 @@ var commands = []Command{
 	new(CommandProf),
 }
 
+// Command interface defines the structure for console commands.
+// All methods must be goroutine-safe.
 type Command interface {
-	// must goroutine safe
-	name() string
-	// must goroutine safe
-	help() string
-	// must goroutine safe
-	run(args []string) string
+	name() string             // returns the name of the command
+	help() string             // returns the help text for the command
+	run(args []string) string // executes the command with the given arguments
 }
 
+// ExternalCommand represents a command registered externally.
 type ExternalCommand struct {
 	_name  string
 	_help  string
@@ -59,8 +59,8 @@ func (c *ExternalCommand) run(_args []string) string {
 	return output
 }
 
-// you must call the function before calling console.Init
-// goroutine not safe
+// Register adds a new external command to the console.
+// This function must be called before console.Init and is not goroutine-safe.
 func Register(name string, help string, f interface{}, server *chanrpc.Server) {
 	for _, c := range commands {
 		if c.name() == name {
@@ -77,7 +77,7 @@ func Register(name string, help string, f interface{}, server *chanrpc.Server) {
 	commands = append(commands, c)
 }
 
-// help
+// CommandHelp provides help information for all registered commands.
 type CommandHelp struct{}
 
 func (c *CommandHelp) name() string {
@@ -89,7 +89,7 @@ func (c *CommandHelp) help() string {
 }
 
 func (c *CommandHelp) run([]string) string {
-	output := "Commands:\r\n"
+	output := "commands:\r\n"
 	for _, c := range commands {
 		output += c.name() + " - " + c.help() + "\r\n"
 	}
@@ -98,7 +98,7 @@ func (c *CommandHelp) run([]string) string {
 	return output
 }
 
-// cpuprof
+// CommandCPUProf handles CPU profiling for the current process.
 type CommandCPUProf struct{}
 
 func (c *CommandCPUProf) name() string {
@@ -106,15 +106,16 @@ func (c *CommandCPUProf) name() string {
 }
 
 func (c *CommandCPUProf) help() string {
-	return "CPU profiling for the current process"
+	return "cpu profiling for the current process"
 }
 
+// usage returns the usage instructions for the cpuprof command.
 func (c *CommandCPUProf) usage() string {
 	return "cpuprof writes runtime profiling data in the format expected by \r\n" +
 		"the pprof visualization tool\r\n\r\n" +
-		"Usage: cpuprof start|stop\r\n" +
-		"  start - enables CPU profiling\r\n" +
-		"  stop  - stops the current CPU profile"
+		"usage: cpuprof start|stop\r\n" +
+		"  start - enables cpu profiling\r\n" +
+		"  stop  - stops the current cpu profile"
 }
 
 func (c *CommandCPUProf) run(args []string) string {
@@ -143,6 +144,7 @@ func (c *CommandCPUProf) run(args []string) string {
 	}
 }
 
+// profileName generates a unique profile file name based on the current timestamp.
 func profileName() string {
 	now := time.Now()
 	return path.Join(conf.ProfilePath,
@@ -155,7 +157,7 @@ func profileName() string {
 			now.Second()))
 }
 
-// prof
+// CommandProf handles runtime profiling snapshots.
 type CommandProf struct{}
 
 func (c *CommandProf) name() string {
@@ -166,13 +168,14 @@ func (c *CommandProf) help() string {
 	return "writes a pprof-formatted snapshot"
 }
 
+// usage returns the usage instructions for the prof command.
 func (c *CommandProf) usage() string {
 	return "prof writes runtime profiling data in the format expected by \r\n" +
 		"the pprof visualization tool\r\n\r\n" +
-		"Usage: prof goroutine|heap|thread|block\r\n" +
+		"usage: prof goroutine|heap|thread|block\r\n" +
 		"  goroutine - stack traces of all current goroutines\r\n" +
 		"  heap      - a sampling of all heap allocations\r\n" +
-		"  thread    - stack traces that led to the creation of new OS threads\r\n" +
+		"  thread    - stack traces that led to the creation of new os threads\r\n" +
 		"  block     - stack traces that led to blocking on synchronization primitives"
 }
 

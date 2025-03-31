@@ -1,7 +1,6 @@
 package storage
 
 import (
-	"errors"
 	"fmt"
 	"reflect"
 	"strings"
@@ -15,32 +14,32 @@ type MgrBase struct {
 	fsName       []string
 }
 
-// 设置Redis键前缀、键值包含的结构体属性名、域值包含的结构体属性名
-func (this *MgrBase) SetRedisKeyField(baseRedisKey string, ksName, fsName []string) {
-	this.baseRedisKey = baseRedisKey
-	this.ksName = ksName
-	this.fsName = fsName
+// set redis key prefix, key field names, and field names
+func (mb *MgrBase) SetRedisKeyField(baseRedisKey string, ksName, fsName []string) {
+	mb.baseRedisKey = baseRedisKey
+	mb.ksName = ksName
+	mb.fsName = fsName
 }
 
-// 获取RedisKey
-func (this *MgrBase) GetRedisKeyWithVal(kvs ...interface{}) (string, error) {
-	if len(kvs) != len(this.ksName) {
-		err := errors.New(fmt.Sprintf("缓存:%v, 键所包含的属性条数不匹配, 应包含属性：%v, 现属性值:%v", this.baseRedisKey, this.ksName, kvs))
+// get redis key with values
+func (mb *MgrBase) GetRedisKeyWithVal(kvs ...any) (string, error) {
+	if len(kvs) != len(mb.ksName) {
+		err := fmt.Errorf("cache:%v, key field count mismatch, expected fields:%v, provided values:%v", mb.baseRedisKey, mb.ksName, kvs)
 		logs.Error(err)
 		return "", err
 	}
 
-	rKey := this.baseRedisKey
+	rKey := mb.baseRedisKey
 	for _, v := range kvs {
 		rKey = fmt.Sprintf("%v_%v", rKey, v)
 	}
 	return rKey, nil
 }
 
-// 获取Redis域
-func (this *MgrBase) GetRedisFieldWithVal(fvs ...interface{}) (string, error) {
-	if len(fvs) != len(this.fsName) {
-		err := errors.New(fmt.Sprintf("缓存:%v, 域所包含的属性条数不匹配, 应包含属性：%v, 现属性值:%v", this.baseRedisKey, this.fsName, fvs))
+// get redis field with values
+func (mb *MgrBase) GetRedisFieldWithVal(fvs ...any) (string, error) {
+	if len(fvs) != len(mb.fsName) {
+		err := fmt.Errorf("cache:%v, field count mismatch, expected fields:%v, provided values:%v", mb.baseRedisKey, mb.fsName, fvs)
 		logs.Error(err)
 		return "", err
 	}
@@ -53,16 +52,16 @@ func (this *MgrBase) GetRedisFieldWithVal(fvs ...interface{}) (string, error) {
 	return rField, nil
 }
 
-// 获取Redis键 根据结构体对象
-func (this *MgrBase) GetRedisKeyWithObj(p interface{}) (string, error) {
-	if len(this.baseRedisKey) == 0 && len(this.ksName) == 0 {
-		err := errors.New(fmt.Sprintf("缓存:%v, 未设置基础键、键所包含的属性名", this.baseRedisKey))
+// get redis key based on struct object
+func (mb *MgrBase) GetRedisKeyWithObj(p any) (string, error) {
+	if len(mb.baseRedisKey) == 0 && len(mb.ksName) == 0 {
+		err := fmt.Errorf("cache:%v, base key or key field names not set", mb.baseRedisKey)
 		logs.Error(err)
 		return "", err
 	}
 
-	if len(this.ksName) == 0 {
-		return this.baseRedisKey, nil
+	if len(mb.ksName) == 0 {
+		return mb.baseRedisKey, nil
 	}
 
 	pv := reflect.ValueOf(p)
@@ -70,25 +69,25 @@ func (this *MgrBase) GetRedisKeyWithObj(p interface{}) (string, error) {
 		pv = pv.Elem()
 	}
 
-	kvs := make([]interface{}, 0, len(this.ksName))
-	for _, v := range this.ksName {
+	kvs := make([]any, 0, len(mb.ksName))
+	for _, v := range mb.ksName {
 		objKeyField := pv.FieldByName(v)
 		if !objKeyField.IsValid() {
-			err := errors.New(fmt.Sprintf("缓存:%v, 获取Redis键, 结构体:%v, 属性读取失败:%v", this.baseRedisKey, reflect.TypeOf(p), v))
+			err := fmt.Errorf("cache:%v, failed to read struct field:%v for redis key", mb.baseRedisKey, v)
 			logs.Error(err)
 			return "", err
 		}
 		kvs = append(kvs, objKeyField)
 	}
 
-	rKey, err := this.GetRedisKeyWithVal(kvs...)
+	rKey, err := mb.GetRedisKeyWithVal(kvs...)
 	return rKey, err
 }
 
-// 获取Redis域 根据结构体对象
-func (this *MgrBase) GetRedisFieldWithObj(p interface{}) (string, error) {
-	if len(this.fsName) == 0 {
-		err := errors.New(fmt.Sprintf("缓存:%v, 未设置域所包含的属性名", this.baseRedisKey))
+// get redis field based on struct object
+func (mb *MgrBase) GetRedisFieldWithObj(p any) (string, error) {
+	if len(mb.fsName) == 0 {
+		err := fmt.Errorf("cache:%v, field names not set", mb.baseRedisKey)
 		logs.Error(err)
 		return "", err
 	}
@@ -98,29 +97,29 @@ func (this *MgrBase) GetRedisFieldWithObj(p interface{}) (string, error) {
 		pv = pv.Elem()
 	}
 
-	fvs := make([]interface{}, 0, len(this.fsName))
-	for _, v := range this.fsName {
+	fvs := make([]any, 0, len(mb.fsName))
+	for _, v := range mb.fsName {
 		objKeyField := pv.FieldByName(v)
 		if !objKeyField.IsValid() {
-			err := errors.New(fmt.Sprintf("缓存:%v, 获取Redis域, 结构体:%v, 属性读取失败:%v", this.baseRedisKey, reflect.TypeOf(p), v))
+			err := fmt.Errorf("cache:%v, failed to read struct field:%v for redis field", mb.baseRedisKey, v)
 			logs.Error(err)
 			return "", err
 		}
 		fvs = append(fvs, objKeyField)
 	}
 
-	rField, err := this.GetRedisFieldWithVal(fvs...)
+	rField, err := mb.GetRedisFieldWithVal(fvs...)
 	return rField, err
 }
 
-// 获取Redis键、域 根据结构体对象
-func (this *MgrBase) GetRedisKeyFieldWithObj(p interface{}) (rKey string, rField string, err error) {
-	rKey, err = this.GetRedisKeyWithObj(p)
+// get redis key and field based on struct object
+func (mb *MgrBase) GetRedisKeyFieldWithObj(p any) (rKey string, rField string, err error) {
+	rKey, err = mb.GetRedisKeyWithObj(p)
 	if err != nil {
 		return "", "", err
 	}
 
-	rField, err = this.GetRedisFieldWithObj(p)
+	rField, err = mb.GetRedisFieldWithObj(p)
 	if err != nil {
 		return "", "", err
 	}
@@ -128,34 +127,29 @@ func (this *MgrBase) GetRedisKeyFieldWithObj(p interface{}) (rKey string, rField
 	return
 }
 
-// 将切片转成存储格式的Map
-func (this *MgrBase) sliceToRedisMap(pSlice interface{}) (mData map[string]map[interface{}]interface{}, err error) {
+// convert slice to redis map format
+func (mb *MgrBase) sliceToRedisMap(pSlice any) (mData map[string]map[any]any, err error) {
 	v := reflect.ValueOf(pSlice)
 	if v.Kind() == reflect.Ptr {
 		v = v.Elem()
 	}
-	n := v.Len()
 
-	mData = make(map[string]map[interface{}]interface{}) // key1=redisKey, key2=redisField
-	for i := 0; i < n; i++ {
+	mData = make(map[string]map[any]any) // key1=redisKey, key2=redisField
+	for i := range v.Len() {
 		item := v.Index(i).Interface()
-		rv := reflect.ValueOf(item)
-		if reflect.TypeOf(rv).Kind() == reflect.Ptr {
-			rv = rv.Elem()
-		}
 
-		rKey, err := this.GetRedisKeyWithObj(item)
+		rKey, err := mb.GetRedisKeyWithObj(item)
 		if err != nil {
 			return nil, err
 		}
 
-		rField, err := this.GetRedisFieldWithObj(item)
+		rField, err := mb.GetRedisFieldWithObj(item)
 		if err != nil {
 			return nil, err
 		}
 
 		if _, ok := mData[rKey]; !ok {
-			mData[rKey] = make(map[interface{}]interface{})
+			mData[rKey] = make(map[any]any)
 		}
 		mData[rKey][rField] = item
 	}
@@ -163,23 +157,19 @@ func (this *MgrBase) sliceToRedisMap(pSlice interface{}) (mData map[string]map[i
 	return mData, nil
 }
 
-// 加载, pSlice=数据容器引用切片, dbQueryParams=数据库查询参数
-func (this *MgrBase) ReloadDbDataToRedis(pSlice interface{}, dbQueryParams map[string]interface{}) (n int, err error) {
-	// 从数据库查询
+// reload db data to redis, pSlice=container slice reference, dbQueryParams=database query parameters
+func (mb *MgrBase) ReloadDbDataToRedis(pSlice any, dbQueryParams map[string]any) (n int, err error) {
 	err = GetDbCli().SelectMultiple(pSlice, dbQueryParams)
 	if err != nil {
 		return 0, err
 	}
 
-	// 将切片转换成指定Map结构
-	mData, err := this.sliceToRedisMap(pSlice)
+	mData, err := mb.sliceToRedisMap(pSlice)
 	if err != nil {
 		return 0, err
 	}
 
-	// 存储到Redis中
 	for k1, v1 := range mData {
-		// 写入Redis缓存
 		err = GetRedisCli().DoHMSet(k1, v1)
 		if err != nil {
 			return 0, err
@@ -191,25 +181,25 @@ func (this *MgrBase) ReloadDbDataToRedis(pSlice interface{}, dbQueryParams map[s
 	return n, nil
 }
 
-// DB和Redis 新增数据
-func (this *MgrBase) Add(p ...interface{}) bool {
+// db and redis add data
+func (mb *MgrBase) Add(p ...any) bool {
 	if len(p) == 0 {
-		logs.Error("缓存:%v, add empty", this.baseRedisKey)
+		logs.Error("cache:%v, add empty", mb.baseRedisKey)
 		return false
 	}
 
 	if len(p) == 1 {
-		rKey, rField, err := this.GetRedisKeyFieldWithObj(p[0])
+		rKey, rField, err := mb.GetRedisKeyFieldWithObj(p[0])
 		if err != nil {
 			return false
 		}
 		err = Add(rKey, rField, p[0])
 		if err != nil {
-			logs.Error(fmt.Sprintf("DB和Redis 增加数据失败, 结构体=%v, err=%v", reflect.TypeOf(p[0]), err))
+			logs.Error(fmt.Sprintf("db and redis add data failed, struct=%v, err=%v", reflect.TypeOf(p[0]), err))
 			return false
 		}
 	} else {
-		mData, err := this.sliceToRedisMap(p)
+		mData, err := mb.sliceToRedisMap(p)
 		if err != nil {
 			return false
 		}
@@ -223,25 +213,25 @@ func (this *MgrBase) Add(p ...interface{}) bool {
 	return true
 }
 
-// DB和Redis 删除数据
-func (this *MgrBase) Delete(p ...interface{}) bool {
+// db and redis delete data
+func (mb *MgrBase) Delete(p ...any) bool {
 	if len(p) == 0 {
-		logs.Error("缓存:%v, delete empty", this.baseRedisKey)
+		logs.Error("cache:%v, delete empty", mb.baseRedisKey)
 		return false
 	}
 
 	if len(p) == 1 {
-		rKey, rField, err := this.GetRedisKeyFieldWithObj(p[0])
+		rKey, rField, err := mb.GetRedisKeyFieldWithObj(p[0])
 		if err != nil {
 			return false
 		}
 		err = Delete(rKey, rField, p[0])
 		if err != nil {
-			logs.Error(fmt.Sprintf("缓存:%v, DB和Redis 删除数据失败, 结构体=%v, err=%v", this.baseRedisKey, reflect.TypeOf(p[0]), err))
+			logs.Error(fmt.Sprintf("cache:%v, db and redis delete data failed, struct=%v, err=%v", mb.baseRedisKey, reflect.TypeOf(p[0]), err))
 			return false
 		}
 	} else {
-		mData, err := this.sliceToRedisMap(p)
+		mData, err := mb.sliceToRedisMap(p)
 		if err != nil {
 			return false
 		}
@@ -255,25 +245,25 @@ func (this *MgrBase) Delete(p ...interface{}) bool {
 	return true
 }
 
-// DB和Redis 修改数据
-func (this *MgrBase) Update(columns []string, p ...interface{}) bool {
+// db and redis update data
+func (mb *MgrBase) Update(columns []string, p ...any) bool {
 	if len(p) == 0 {
-		logs.Error(fmt.Sprintf("缓存:%v, update empty", this.baseRedisKey))
+		logs.Error(fmt.Sprintf("cache:%v, update empty", mb.baseRedisKey))
 		return false
 	}
 
 	if len(p) == 1 {
-		rKey, rField, err := this.GetRedisKeyFieldWithObj(p[0])
+		rKey, rField, err := mb.GetRedisKeyFieldWithObj(p[0])
 		if err != nil {
 			return false
 		}
 		err = Update(rKey, rField, p[0], columns...)
 		if err != nil {
-			logs.Error(fmt.Sprintf("缓存:%v, DB和Redis 修改数据失败, 结构体=%v, err=%v", this.baseRedisKey, reflect.TypeOf(p[0]), err))
+			logs.Error(fmt.Sprintf("cache:%v, db and redis update data failed, struct=%v, err=%v", mb.baseRedisKey, reflect.TypeOf(p[0]), err))
 			return false
 		}
 	} else {
-		mData, err := this.sliceToRedisMap(p)
+		mData, err := mb.sliceToRedisMap(p)
 		if err != nil {
 			return false
 		}
@@ -287,27 +277,27 @@ func (this *MgrBase) Update(columns []string, p ...interface{}) bool {
 	return true
 }
 
-// 从Redis 获取单个域数据
-func (this *MgrBase) GetWithSingleKVs(kv interface{}, fv interface{}, p interface{}) (exists bool, err error) {
-	var kvs []interface{} = nil
+// get single field data from redis
+func (mb *MgrBase) GetWithSingleKVs(kv any, fv any, p any) (exists bool, err error) {
+	var kvs []any = nil
 	if kv != nil {
-		kvs = []interface{}{kv}
+		kvs = []any{kv}
 	}
-	var fvs []interface{} = nil
+	var fvs []any = nil
 	if fv != nil {
-		fvs = []interface{}{fv}
+		fvs = []any{fv}
 	}
-	return this.Get(kvs, fvs, p)
+	return mb.Get(kvs, fvs, p)
 }
 
-// 从Redis 获取单个域数据
-func (this *MgrBase) Get(kvs []interface{}, fvs []interface{}, p interface{}) (exists bool, err error) {
-	rKey, err := this.GetRedisKeyWithVal(kvs...)
+// get single field data from redis
+func (mb *MgrBase) Get(kvs []any, fvs []any, p any) (exists bool, err error) {
+	rKey, err := mb.GetRedisKeyWithVal(kvs...)
 	if err != nil {
 		return false, err
 	}
 
-	rField, err := this.GetRedisFieldWithVal(fvs...)
+	rField, err := mb.GetRedisFieldWithVal(fvs...)
 	if err != nil {
 		return false, err
 	}
@@ -316,29 +306,29 @@ func (this *MgrBase) Get(kvs []interface{}, fvs []interface{}, p interface{}) (e
 	return
 }
 
-// 从Redis获取多个域数据
-func (this *MgrBase) GetMultipleWithSingleKVs(kv interface{}, fv []interface{}, p interface{}) error {
-	fvs := make([][]interface{}, 0, len(fv))
+// get multiple field data from redis
+func (mb *MgrBase) GetMultipleWithSingleKVs(kv any, fv []any, p any) error {
+	fvs := make([][]any, 0, len(fv))
 	for _, v := range fv {
-		fvs = append(fvs, []interface{}{v})
+		fvs = append(fvs, []any{v})
 	}
-	var kvs []interface{} = nil
+	var kvs []any = nil
 	if kv != nil {
-		kvs = []interface{}{kv}
+		kvs = []any{kv}
 	}
-	return this.GetMultiple(kvs, fvs, p)
+	return mb.GetMultiple(kvs, fvs, p)
 }
 
-// 从Redis获取多个域数据
-func (this *MgrBase) GetMultiple(kvs []interface{}, fvs [][]interface{}, p interface{}) error {
-	rKey, err := this.GetRedisKeyWithVal(kvs...)
+// get multiple field data from redis
+func (mb *MgrBase) GetMultiple(kvs []any, fvs [][]any, p any) error {
+	rKey, err := mb.GetRedisKeyWithVal(kvs...)
 	if err != nil {
 		return err
 	}
 
-	args := make([]interface{}, 0)
+	args := make([]any, 0)
 	for _, v := range fvs {
-		rField, err := this.GetRedisFieldWithVal(v...)
+		rField, err := mb.GetRedisFieldWithVal(v...)
 		if err != nil {
 			return err
 		}
@@ -353,20 +343,20 @@ func (this *MgrBase) GetMultiple(kvs []interface{}, fvs [][]interface{}, p inter
 	return nil
 }
 
-// 从Redis获取全部域数据, [0,n-1]为Redis键构造值, [n-1]为接收数据的容器引用
-func (this *MgrBase) GetAll(param ...interface{}) error {
+// get all field data from redis, [0,n-1] are redis key values, [n-1] is the container reference
+func (mb *MgrBase) GetAll(param ...any) error {
 	if len(param) < 1 {
-		err := errors.New(fmt.Sprintf("缓存:%v, 参数数量不正确:%v", this.baseRedisKey, param))
+		err := fmt.Errorf("cache:%v, incorrect number of parameters:%v", mb.baseRedisKey, param)
 		logs.Error(err)
 		return err
 	}
 	if reflect.TypeOf(param[len(param)-1]).Kind() != reflect.Ptr {
-		err := errors.New(fmt.Sprintf("缓存:%v, 参数类型不正确:%v", this.baseRedisKey, param))
+		err := fmt.Errorf("cache:%v, incorrect parameter type:%v", mb.baseRedisKey, param)
 		logs.Error(err)
 		return err
 	}
 
-	rKey, err := this.GetRedisKeyWithVal(param[:len(param)-1]...)
+	rKey, err := mb.GetRedisKeyWithVal(param[:len(param)-1]...)
 	if err != nil {
 		return err
 	}
@@ -378,9 +368,9 @@ func (this *MgrBase) GetAll(param ...interface{}) error {
 	return nil
 }
 
-// 查询单Key域列表数量
-func (this *MgrBase) GetFieldsLen(kvs ...interface{}) (int64, error) {
-	rKey, err := this.GetRedisKeyWithVal(kvs...)
+// get field list length for single key
+func (mb *MgrBase) GetFieldsLen(kvs ...any) (int64, error) {
+	rKey, err := mb.GetRedisKeyWithVal(kvs...)
 	if err != nil {
 		return 0, err
 	}
@@ -393,20 +383,20 @@ func (this *MgrBase) GetFieldsLen(kvs ...interface{}) (int64, error) {
 	return l, nil
 }
 
-// 获取域列表, [0,n-1]为Redis键构造值, [n-1]为接收数据的容器引用
-func (this *MgrBase) GetFields(param ...interface{}) error {
+// get field list, [0,n-1] are redis key values, [n-1] is the container reference
+func (mb *MgrBase) GetFields(param ...any) error {
 	if len(param) < 1 {
-		err := errors.New(fmt.Sprintf("缓存:%v, 参数数量不正确:%v", this.baseRedisKey, param))
+		err := fmt.Errorf("cache:%v, incorrect number of parameters:%v", mb.baseRedisKey, param)
 		logs.Error(err)
 		return err
 	}
 	if reflect.TypeOf(param[len(param)-1]).Kind() != reflect.Ptr {
-		err := errors.New(fmt.Sprintf("缓存:%v, 参数类型不正确:%v", this.baseRedisKey, param))
+		err := fmt.Errorf("cache:%v, incorrect parameter type:%v", mb.baseRedisKey, param)
 		logs.Error(err)
 		return err
 	}
 
-	rKey, err := this.GetRedisKeyWithVal(param[:len(param)-1]...)
+	rKey, err := mb.GetRedisKeyWithVal(param[:len(param)-1]...)
 	if err != nil {
 		return err
 	}
@@ -418,9 +408,9 @@ func (this *MgrBase) GetFields(param ...interface{}) error {
 	return nil
 }
 
-// 是否存在指定键
-func (this *MgrBase) IsKeyExists(kvs ...interface{}) (exists bool, err error) {
-	rKey, err := this.GetRedisKeyWithVal(kvs...)
+// check if key exists
+func (mb *MgrBase) IsKeyExists(kvs ...any) (exists bool, err error) {
+	rKey, err := mb.GetRedisKeyWithVal(kvs...)
 	if err != nil {
 		return false, err
 	}
@@ -429,14 +419,14 @@ func (this *MgrBase) IsKeyExists(kvs ...interface{}) (exists bool, err error) {
 	return exists, err
 }
 
-// 是否存在指定域
-func (this *MgrBase) IsFieldExists(kvs []interface{}, fvs []interface{}) (exists bool, err error) {
-	rKey, err := this.GetRedisKeyWithVal(kvs...)
+// check if field exists
+func (mb *MgrBase) IsFieldExists(kvs []any, fvs []any) (exists bool, err error) {
+	rKey, err := mb.GetRedisKeyWithVal(kvs...)
 	if err != nil {
 		return false, err
 	}
 
-	rField, err := this.GetRedisFieldWithVal(fvs...)
+	rField, err := mb.GetRedisFieldWithVal(fvs...)
 	if err != nil {
 		return false, err
 	}
@@ -445,10 +435,10 @@ func (this *MgrBase) IsFieldExists(kvs []interface{}, fvs []interface{}) (exists
 	return exists, err
 }
 
-// Redis 新增数据
-func (this *MgrBase) AddToRedis(p ...interface{}) bool {
+// add data to redis
+func (mb *MgrBase) AddToRedis(p ...any) bool {
 	if len(p) == 0 {
-		logs.Error("缓存:%v, add empty", this.baseRedisKey)
+		logs.Error("cache:%v, add empty", mb.baseRedisKey)
 		return false
 	}
 
@@ -459,7 +449,7 @@ func (this *MgrBase) AddToRedis(p ...interface{}) bool {
 	}
 
 	if len(p) == 1 {
-		rKey, rField, err := this.GetRedisKeyFieldWithObj(p[0])
+		rKey, rField, err := mb.GetRedisKeyFieldWithObj(p[0])
 		if err != nil {
 			return false
 		}
@@ -467,7 +457,7 @@ func (this *MgrBase) AddToRedis(p ...interface{}) bool {
 			return false
 		}
 	} else {
-		mData, err := this.sliceToRedisMap(p)
+		mData, err := mb.sliceToRedisMap(p)
 		if err != nil {
 			return false
 		}
@@ -481,10 +471,10 @@ func (this *MgrBase) AddToRedis(p ...interface{}) bool {
 	return true
 }
 
-// 获取单个域数据
-func (this *MgrBase) GetWithCheckDbLoad(kvs []interface{}, fvs []interface{}, p interface{}) (err error) {
-	// 缓存查找
-	exists, err := this.Get(kvs, fvs, p)
+// get single field data with db load check
+func (mb *MgrBase) GetWithCheckDbLoad(kvs []any, fvs []any, p any) (err error) {
+	// cache lookup
+	exists, err := mb.Get(kvs, fvs, p)
 	if err != nil {
 		return err
 	}
@@ -492,28 +482,26 @@ func (this *MgrBase) GetWithCheckDbLoad(kvs []interface{}, fvs []interface{}, p 
 		return nil
 	}
 
-	// 缓存不存在则数据库查找加载
-	dbQueryParams := make(map[string]interface{})
+	dbQueryParams := make(map[string]any)
 	for i, v := range kvs {
 		if v != nil {
-			dbQueryParams[this.ksName[i]] = v
+			dbQueryParams[mb.ksName[i]] = v
 		}
 	}
 	for i, v := range fvs {
 		if v != nil {
-			dbQueryParams[this.fsName[i]] = v
+			dbQueryParams[mb.fsName[i]] = v
 		}
 	}
 	if err = GetDbCli().SelectSingle(p, dbQueryParams); err != nil {
 		return err
 	}
 
-	// 将数据库查找到的数据写入缓存
-	rKey, err := this.GetRedisKeyWithVal(kvs...)
+	rKey, err := mb.GetRedisKeyWithVal(kvs...)
 	if err != nil {
 		return err
 	}
-	rField, err := this.GetRedisFieldWithVal(fvs...)
+	rField, err := mb.GetRedisFieldWithVal(fvs...)
 	if err != nil {
 		return err
 	}

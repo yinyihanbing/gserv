@@ -6,26 +6,27 @@ import (
 	"sync"
 	"time"
 
-	"github.com/garyburd/redigo/redis"
+	"github.com/gomodule/redigo/redis"
 	"github.com/yinyihanbing/gutils"
 	"github.com/yinyihanbing/gutils/logs"
 )
 
+// DbQueueType defines the type of database queue
 type DbQueueType int
 
 const (
-	DbQueueTypeNone   DbQueueType = 0 // 无队列
-	DbQueueTypeMemory DbQueueType = 1 // 内存队列
-	DbQueueTypeRedis  DbQueueType = 2 // Redis队列
+	DbQueueTypeNone   DbQueueType = 0 // no queue
+	DbQueueTypeMemory DbQueueType = 1 // in-memory queue
+	DbQueueTypeRedis  DbQueueType = 2 // redis queue
 )
 
-// 数据库写入队列
+// DbQueue represents a database write queue
 type DbQueue struct {
-	QueueType        DbQueueType // 队列类型
-	QueueLimitCount  int         // sql队列上限数, 超过上限必需等待
-	QueueRedisCliIdx int         // Redis连接池编号
-	QueueDbCliIdx    int         // Db连接池编号
-	RedisQueueKey    string      // Redis队列Key
+	QueueType        DbQueueType // queue type
+	QueueLimitCount  int         // max number of sql in queue, blocks if exceeded
+	QueueRedisCliIdx int         // redis connection pool index
+	QueueDbCliIdx    int         // db connection pool index
+	RedisQueueKey    string      // redis queue key
 	chanSql          chan string
 	wg               sync.WaitGroup
 	closeFlag        bool
@@ -35,13 +36,13 @@ type DbQueue struct {
 	Dcr         *DbQueueDcr
 }
 
-// 采集队列信息
+// DbQueueDcr collects queue statistics
 type DbQueueDcr struct {
-	PutCount  uint64 // 放入数量
-	ExecCount uint64 // 执行数量
+	PutCount  uint64 // number of sql added to the queue
+	ExecCount uint64 // number of sql executed
 }
 
-// 实例化队列, queueType=队列类型, queueRedisCliIdx=Reids连接池编号, dbCliIdx=数据库连接池编号, queueLimitCount=队列条数上限
+// NewDbQueue initializes a new database queue
 func NewDbQueue(queueType DbQueueType, redisCliIdx int, dbCliIdx int, queueLimitCount int) *DbQueue {
 	dbQueue := new(DbQueue)
 	dbQueue.QueueType = queueType
@@ -61,85 +62,82 @@ func NewDbQueue(queueType DbQueueType, redisCliIdx int, dbCliIdx int, queueLimit
 	return dbQueue
 }
 
-// 写入队列
-func (this *DbQueue) PutToQueue(strSql string) {
-	if this.closeFlag {
-		logs.Error("cannot put in queue! db queue stopping, db idx=%v, sql=%v", this.QueueDbCliIdx, strSql)
+// PutToQueue adds an SQL statement to the queue
+func (dq *DbQueue) PutToQueue(strSql string) {
+	if dq.closeFlag {
+		logs.Error("cannot put in queue! db queue stopping, db idx=%v, sql=%v", dq.QueueDbCliIdx, strSql)
 		return
 	}
 
-	switch this.QueueType {
+	switch dq.QueueType {
 	case DbQueueTypeMemory:
-		this.chanSql <- strSql
-		// 统计放入队列数量
-		this.Dcr.PutCount += 1
-		logs.Debug("put sql to member queue: %v", strSql)
+		dq.chanSql <- strSql
+		// increment put count
+		dq.Dcr.PutCount += 1
+		logs.Debug("put sql to memory queue: %v", strSql)
 	case DbQueueTypeRedis:
-		GetRedisCliExt(this.QueueRedisCliIdx).DoRPush(this.RedisQueueKey, strSql)
-		// 统计放入队列数量
-		this.Dcr.PutCount += 1
+		GetRedisCliExt(dq.QueueRedisCliIdx).DoRPush(dq.RedisQueueKey, strSql)
+		// increment put count
+		dq.Dcr.PutCount += 1
 		logs.Debug("put sql to redis queue: %v", strSql)
 	}
 }
 
-// 启动队列
-func (this *DbQueue) StartQueueTask() {
+// StartQueueTask starts the queue processing task
+func (dq *DbQueue) StartQueueTask() {
 	flagShowQueueLog := true
 
-	switch this.QueueType {
+	switch dq.QueueType {
 	case DbQueueTypeMemory:
-		go this.startMemoryQueueTask()
+		go dq.startMemoryQueueTask()
 	case DbQueueTypeRedis:
-		go this.startRedisQueueTask()
+		go dq.startRedisQueueTask()
 	default:
 		flagShowQueueLog = false
 	}
 
 	if flagShowQueueLog {
-		// 定时输出队列信息
-		this.timerHelper.CronFuncExt("0 */10 * * * *", this.OutStatusTask)
+		// schedule periodic queue status output
+		dq.timerHelper.CronFuncExt("0 */10 * * * *", dq.OutStatusTask)
 	}
 }
 
-// 内存方式队列任务
-func (this *DbQueue) startMemoryQueueTask() {
-	defer this.PanicError()
-	this.wg.Add(1)
-	defer this.wg.Done()
+// startMemoryQueueTask processes the in-memory queue
+func (dq *DbQueue) startMemoryQueueTask() {
+	defer dq.PanicError()
+	dq.wg.Add(1)
+	defer dq.wg.Done()
 
-	for {
-		select {
-		case strSql := <-this.chanSql:
-			if strSql == "" && len(this.chanSql) == 0 {
-				logs.Info("close memory queue successfully, dbCliIdx: [%v] ", this.QueueDbCliIdx)
-				return
-			}
-
-			// 写入到数据库
-			_, err := GetDbCliExt(this.QueueDbCliIdx).Exec(strSql)
-			if err != nil {
-				logs.Error("%v", err)
-			}
-			// 统计执行数量
-			this.Dcr.ExecCount += 1
+	for strSql := range dq.chanSql {
+		if strSql == "" && len(dq.chanSql) == 0 {
+			logs.Info("closed memory queue successfully, dbCliIdx: [%v]", dq.QueueDbCliIdx)
+			return
 		}
+
+		// execute sql in database
+		_, err := GetDbCliExt(dq.QueueDbCliIdx).Exec(strSql)
+		if err != nil {
+			logs.Error("db exec error: %v", err)
+		}
+		// increment exec count
+		dq.Dcr.ExecCount += 1
 	}
 }
 
-// Redis缓存方式队列任务
-func (this *DbQueue) startRedisQueueTask() {
-	defer this.PanicError()
-	this.wg.Add(1)
-	defer this.wg.Done()
+// startRedisQueueTask processes the redis queue
+func (dq *DbQueue) startRedisQueueTask() {
+	defer dq.PanicError()
+	dq.wg.Add(1)
+	defer dq.wg.Done()
 
 	for {
-		// 获取队列数据
-		ret, err := GetRedisCliExt(this.QueueRedisCliIdx).DoLPop(this.RedisQueueKey)
+		// fetch data from queue
+		ret, err := GetRedisCliExt(dq.QueueRedisCliIdx).DoLPop(dq.RedisQueueKey)
 
-		// 空队列处理
+		// handle empty queue
 		if (ret == nil && err == nil) || err == redis.ErrNil {
-			if this.closeFlag {
-				logs.Info("close redis queue successfully, dbCliIdx: [%v] ", this.QueueDbCliIdx)
+			if dq.closeFlag {
+				logs.Info("closed redis queue successfully, dbCliIdx: [%v]", dq.QueueDbCliIdx)
 				break
 			} else {
 				time.Sleep(3 * time.Second)
@@ -147,63 +145,64 @@ func (this *DbQueue) startRedisQueueTask() {
 			}
 		}
 
-		// 异常处理
+		// handle errors
 		if err != nil {
-			logs.Error("Redis Do lpop error! err=%v", err)
+			logs.Error("redis lpop error: %v", err)
 			time.Sleep(3 * time.Second)
 			continue
 		}
 
 		strSql, err := redis.String(ret, err)
 		if err != nil {
-			logs.Error("Redis Do lpop error! err=%v", err)
+			logs.Error("redis lpop error: %v", err)
 			time.Sleep(3 * time.Second)
 			continue
 		}
 
-		dbCli := GetDbCliExt(this.QueueDbCliIdx)
+		// execute sql in database
+		dbCli := GetDbCliExt(dq.QueueDbCliIdx)
 		_, err = dbCli.Exec(strSql)
 		if err != nil {
-			logs.Error("%v", err)
+			logs.Error("db exec error: %v", err)
 		}
 
-		// 统计执行数量
-		this.Dcr.ExecCount += 1
+		// increment exec count
+		dq.Dcr.ExecCount += 1
 	}
 }
 
-// 关闭队列
-func (this *DbQueue) Destroy() {
-	this.lock.Lock()
-	defer this.lock.Unlock()
+// Destroy stops the queue and cleans up resources
+func (dq *DbQueue) Destroy() {
+	dq.lock.Lock()
+	defer dq.lock.Unlock()
 
-	if this.closeFlag == false {
-		this.closeFlag = true
+	if !dq.closeFlag {
+		dq.closeFlag = true
 
-		switch this.QueueType {
+		switch dq.QueueType {
 		case DbQueueTypeMemory:
-			this.chanSql <- ""
-			logs.Info("waiting memory queue close... dbCliIdx: [%v], count=%v", this.QueueDbCliIdx, this.GetQueueCount())
-			this.wg.Wait()
+			dq.chanSql <- ""
+			logs.Info("waiting for memory queue to close... dbCliIdx: [%v], count=%v", dq.QueueDbCliIdx, dq.GetQueueCount())
+			dq.wg.Wait()
 		case DbQueueTypeRedis:
-			logs.Info("waiting redis queue close... dbCliIdx: [%v], count=%v", this.QueueDbCliIdx, this.GetQueueCount())
-			this.wg.Wait()
+			logs.Info("waiting for redis queue to close... dbCliIdx: [%v], count=%v", dq.QueueDbCliIdx, dq.GetQueueCount())
+			dq.wg.Wait()
 		}
 
-		// 停止定时器
-		this.timerHelper.Stop()
+		// stop timer
+		dq.timerHelper.Stop()
 	}
 }
 
-// 获取队列数量
-func (this *DbQueue) GetQueueCount() int64 {
-	switch this.QueueType {
+// GetQueueCount returns the current queue size
+func (dq *DbQueue) GetQueueCount() int64 {
+	switch dq.QueueType {
 	case DbQueueTypeMemory:
-		return int64(len(this.chanSql))
+		return int64(len(dq.chanSql))
 	case DbQueueTypeRedis:
-		count, err := GetRedisCliExt(this.QueueRedisCliIdx).DoLLen(this.RedisQueueKey)
+		count, err := GetRedisCliExt(dq.QueueRedisCliIdx).DoLLen(dq.RedisQueueKey)
 		if err != nil {
-			logs.Error("get redis queue count err: %v", err)
+			logs.Error("get redis queue count error: %v", err)
 			return 0
 		}
 		return count
@@ -211,19 +210,19 @@ func (this *DbQueue) GetQueueCount() int64 {
 	return 0
 }
 
-// 输出状态任务
-func (this *DbQueue) OutStatusTask() {
-	logs.Info("[db%v] queue count = %v", this.QueueDbCliIdx, this.GetQueueCount())
-	logs.Info("[db%v] put count = %v", this.QueueDbCliIdx, this.Dcr.PutCount)
-	logs.Info("[db%v] exec count = %v", this.QueueDbCliIdx, this.Dcr.ExecCount)
+// OutStatusTask outputs the queue status periodically
+func (dq *DbQueue) OutStatusTask() {
+	logs.Info("[db%v] queue count = %v", dq.QueueDbCliIdx, dq.GetQueueCount())
+	logs.Info("[db%v] put count = %v", dq.QueueDbCliIdx, dq.Dcr.PutCount)
+	logs.Info("[db%v] exec count = %v", dq.QueueDbCliIdx, dq.Dcr.ExecCount)
 }
 
-// 崩溃错误处理
-func (this *DbQueue) PanicError() {
+// PanicError handles panic errors and logs the stack trace
+func (dq *DbQueue) PanicError() {
 	if r := recover(); r != nil {
 		buf := make([]byte, 4096)
 		l := runtime.Stack(buf, false)
-		err := fmt.Errorf("%v: %s", r, buf[:l])
+		err := fmt.Errorf("panic recovered: %v: %s", r, buf[:l])
 		logs.Fatal(err)
 	}
 }
